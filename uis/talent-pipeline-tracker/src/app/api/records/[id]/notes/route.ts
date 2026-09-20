@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: Params) {
     candidate.notes.unshift(newNote);
 
     return NextResponse.json(newNote, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Error al crear la nota.' },
       { status: 400 }

@@ -86,8 +86,11 @@ export default function CandidateDetailPage({ params }: PageProps) {
   }, [candidateId]);
 
   useEffect(() => {
-    fetchCandidate();
-    fetchNotes();
+    const timeoutId = window.setTimeout(() => {
+      void fetchCandidate();
+      void fetchNotes();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [fetchCandidate, fetchNotes]);
 
   // Handle status update

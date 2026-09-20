@@ -30,14 +30,14 @@ export const NotesList: React.FC<NotesListProps> = ({
 
   return (
     <div className="space-y-4">
-      {notes.map((note) => {
+      {notes.map((note, index) => {
         const noteId = getNoteId(note);
         const createdAt = getNoteCreatedAt(note);
         const isDeleting = deletingNoteId === noteId;
 
         return (
           <div
-            key={noteId || Math.random().toString()}
+            key={noteId || `${createdAt || 'note'}-${index}`}
             className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-700 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
           >
             <div className="flex-1">
