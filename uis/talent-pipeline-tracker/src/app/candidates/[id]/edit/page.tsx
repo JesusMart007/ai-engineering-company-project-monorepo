@@ -41,7 +41,8 @@ export default function EditCandidatePage({ params }: PageProps) {
   }, [candidateId]);
 
   useEffect(() => {
-    fetchCandidate();
+    const timeoutId = window.setTimeout(() => void fetchCandidate(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [fetchCandidate]);
 
   const handleUpdate = async (formData: Partial<Candidate>) => {

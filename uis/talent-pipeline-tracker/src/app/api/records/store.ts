@@ -1,6 +1,6 @@
-import { CandidateDetail, Note } from '../../../types/candidate';
+import { CandidateDetail } from '../../../types/candidate';
 
-export let mockCandidates: CandidateDetail[] = [
+export const mockCandidates: CandidateDetail[] = [
   {
     id: 'cand-001',
     name: 'Laura Mendoza',

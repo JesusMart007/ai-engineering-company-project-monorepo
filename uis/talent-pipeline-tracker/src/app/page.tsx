@@ -44,7 +44,8 @@ function CandidatePipelineContent() {
   }, []);
 
   useEffect(() => {
-    fetchCandidatesData();
+    const timeoutId = window.setTimeout(() => void fetchCandidatesData(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [fetchCandidatesData]);
 
   // Helper to update query params without full page reload

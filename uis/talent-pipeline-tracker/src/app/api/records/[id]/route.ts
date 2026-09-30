@@ -38,7 +38,7 @@ export async function PATCH(request: Request, { params }: Params) {
       updated_at: new Date().toISOString(),
     };
     return NextResponse.json(mockCandidates[index]);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Error al actualizar candidatura.' },
       { status: 400 }

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     mockCandidates.unshift(newCandidate);
     return NextResponse.json(newCandidate, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Error al procesar la solicitud de creación.' },
       { status: 400 }
