@@ -1,4 +1,4 @@
-"""Nexova incident analysis API.
+"""Incident analysis endpoints.
 
 Validation and metrics come from scripts/incident_analysis.py, the same module
 the CLI (scripts/analyze.py) uses, so both always produce identical results.
@@ -7,12 +7,10 @@ the CLI (scripts/analyze.py) uses, so both always produce identical results.
 from __future__ import annotations
 
 import io
-import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -33,20 +31,8 @@ from incident_analysis import (  # noqa: E402
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 CSV_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain", "application/octet-stream"}
-ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
-    if origin.strip()
-]
 
-app = FastAPI(title="Nexova Incident Analyzer")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
-)
+router = APIRouter(prefix="/api/incidents", tags=["incidents"])
 
 _last_result: AnalysisResult | None = None
 
@@ -58,12 +44,7 @@ def _response(result: AnalysisResult) -> dict:
     }
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/api/incidents/analyze")
+@router.post("/analyze")
 async def analyze_incidents(file: UploadFile = File(...)) -> dict:
     global _last_result
     if not file.filename or not file.filename.lower().endswith(".csv"):
@@ -85,7 +66,7 @@ async def analyze_incidents(file: UploadFile = File(...)) -> dict:
     return _response(result)
 
 
-@app.get("/api/incidents/results/export")
+@router.get("/results/export")
 def export_results() -> StreamingResponse:
     if _last_result is None:
         raise HTTPException(status_code=404, detail="No analysis has been run yet; upload a CSV first")
