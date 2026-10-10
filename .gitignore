@@ -9,3 +9,6 @@ uis/backoffice/.next/
 uis/backoffice/node_modules/
 .pytest_cache/
 services/api/data/
+.env
+.env.*
+!.env.example
