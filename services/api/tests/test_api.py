@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import main
 from routes import incidents
 from incident_analysis import analyze_csv_text
 
@@ -17,9 +16,9 @@ CSV_PATH = Path(__file__).resolve().parents[3] / "scripts" / "incidents-nexova.c
 
 
 @pytest.fixture()
-def client():
+def client(auth_client):
     incidents._last_result = None
-    return TestClient(main.app)
+    return auth_client
 
 
 def _upload(client: TestClient, content: bytes, name: str = "incidents.csv", content_type: str = "text/csv"):
@@ -95,3 +94,13 @@ def test_cors_allows_backoffice_origin(client):
         headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "POST"},
     )
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("POST", "/api/incidents/analyze"), ("GET", "/api/incidents/results/export")],
+)
+def test_incident_routes_require_a_token(anon_client, method, path):
+    response = anon_client.request(method, path)
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"

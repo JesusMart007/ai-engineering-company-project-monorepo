@@ -1,15 +1,13 @@
-"""Supplier directory tests: validation, filters, updates, 404s and the seeder."""
+"""Supplier directory tests: validation, filters, updates, 404s, auth and the seeder."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
 import pytest
-from fastapi.testclient import TestClient
 
-import main
 from seed import seed
-from database import DB_PATH_ENV, SupplierRepository
+from database import SupplierRepository
 
 VALID_SUPPLIER = {
     "name": "Personio",
@@ -25,11 +23,9 @@ VALID_SUPPLIER = {
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    """API backed by a temporary TinyDB file, seeded by the lifespan on startup."""
-    monkeypatch.setenv(DB_PATH_ENV, str(tmp_path / "suppliers.json"))
-    with TestClient(main.app) as test_client:
-        yield test_client
+def client(auth_client):
+    """Authenticated API backed by a temporary TinyDB file, seeded by the lifespan on startup."""
+    return auth_client
 
 
 def _names(response) -> set[str]:
@@ -188,3 +184,20 @@ def test_dates_are_stored_as_iso_strings(tmp_path):
     raw = path.read_text(encoding="utf-8")
     assert '"contract_renewal_date": "2025-03-31"' in raw
     assert '"updated_at": "20' in raw
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("GET", "/suppliers", None),
+        ("GET", "/suppliers/1", None),
+        ("POST", "/suppliers", VALID_SUPPLIER),
+        ("PATCH", "/suppliers/1/rate", {"monthly_rate": 100}),
+        ("PATCH", "/suppliers/1/status", {"status": "suspended"}),
+        ("DELETE", "/suppliers/1", None),
+    ],
+)
+def test_supplier_routes_require_a_token(anon_client, method, path, payload):
+    response = anon_client.request(method, path, json=payload)
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"

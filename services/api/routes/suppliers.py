@@ -8,8 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from models import Category, Country, RateUpdate, StatusUpdate, Supplier, SupplierCreate
 from database import SupplierRepository
+from dependencies import get_current_user
 
-router = APIRouter(prefix="/suppliers", tags=["suppliers"])
+# Every supplier endpoint requires a valid bearer token: rates and contacts are confidential.
+router = APIRouter(
+    prefix="/suppliers",
+    tags=["suppliers"],
+    dependencies=[Depends(get_current_user)],
+    responses={401: {"description": "Missing, malformed or expired token"}},
+)
 
 NOT_FOUND = {404: {"description": "Supplier not found"}}
 

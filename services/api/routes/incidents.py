@@ -10,7 +10,7 @@ import io
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -28,11 +28,18 @@ from incident_analysis import (  # noqa: E402
     analyze_csv_text,
     write_results_csv,
 )
+from dependencies import get_current_user  # noqa: E402
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 CSV_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain", "application/octet-stream"}
 
-router = APIRouter(prefix="/api/incidents", tags=["incidents"])
+# Uploaded CSVs contain customer data, so both endpoints require a bearer token.
+router = APIRouter(
+    prefix="/api/incidents",
+    tags=["incidents"],
+    dependencies=[Depends(get_current_user)],
+    responses={401: {"description": "Missing, malformed or expired token"}},
+)
 
 _last_result: AnalysisResult | None = None
 
