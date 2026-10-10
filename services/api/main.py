@@ -1,4 +1,4 @@
-"""Nexova centralized API: supplier directory and incident analysis.
+"""Nexova centralized API: supplier directory, incident analysis and user accounts.
 
 Run with `uv run uvicorn main:app --reload` from services/api.
 """
@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import SupplierRepository, db_path_from_env
-from routes import incidents, suppliers
+from database import SupplierRepository, UserRepository, db_path_from_env, users_db_path_from_env
+from routes import incidents, suppliers, users
 from seed import seed
 
 ALLOWED_ORIGINS = [
@@ -30,19 +30,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if repository.count() == 0:
         seed(repository)
     app.state.supplier_repository = repository
+    app.state.user_repository = UserRepository(users_db_path_from_env())
     try:
         yield
     finally:
         repository.close()
+        app.state.user_repository.close()
 
 
 app = FastAPI(title="Nexova API", lifespan=lifespan)
 app.include_router(suppliers.router)
 app.include_router(incidents.router)
+app.include_router(users.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
