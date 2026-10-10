@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import SupplierRepository, UserRepository, db_path_from_env, users_db_path_from_env
-from routes import incidents, suppliers, users
+from routes import incidents, profiles, suppliers, users
 from seed import seed
 
 ALLOWED_ORIGINS = [
@@ -42,6 +42,7 @@ app = FastAPI(title="Nexova API", lifespan=lifespan)
 app.include_router(suppliers.router)
 app.include_router(incidents.router)
 app.include_router(users.router)
+app.include_router(profiles.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
