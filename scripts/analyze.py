@@ -83,17 +83,23 @@ def print_report(result: AnalysisResult, source: str) -> None:
     print("\n" + "=" * WIDTH)
 
 
-def ask_export(result: AnalysisResult) -> None:
+def ask_export(result: AnalysisResult) -> bool:
+    """Offer the CSV export. False only if the user wanted it and it could not be written."""
     try:
         answer = input("¿Deseas exportar los resultados a CSV? [s/n]: ").strip().lower()
     except EOFError:
         answer = ""
-    if answer in {"s", "si", "sí", "y", "yes"}:
+    if answer not in {"s", "si", "sí", "y", "yes"}:
+        print("No se exportaron resultados.")
+        return True
+    try:
         with Path(RESULTS_FILE).open("w", encoding="utf-8", newline="") as target:
             write_results_csv(result, target)
-        print(f"Resultados exportados a {Path(RESULTS_FILE).resolve()}")
-    else:
-        print("No se exportaron resultados.")
+    except OSError as error:
+        print(f"Error: could not write {RESULTS_FILE}: {error.strerror or error}", file=sys.stderr)
+        return False
+    print(f"Resultados exportados a {Path(RESULTS_FILE).resolve()}")
+    return True
 
 
 def main() -> int:
@@ -114,9 +120,12 @@ def main() -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     print_report(result, path.name)
-    ask_export(result)
-    return 0
+    return 0 if ask_export(result) else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("\nInterrumpido.", file=sys.stderr)
+        raise SystemExit(130) from None

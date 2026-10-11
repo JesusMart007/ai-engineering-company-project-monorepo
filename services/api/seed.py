@@ -6,8 +6,10 @@ exists are skipped, so the directory is never duplicated.
 
 from __future__ import annotations
 
+import sys
+
 from models import SupplierCreate
-from database import SupplierRepository, db_path_from_env
+from database import DatabaseFileError, SupplierRepository, db_path_from_env
 from seed_data import SUPPLIERS_SEED
 
 
@@ -24,15 +26,27 @@ def seed(repository: SupplierRepository) -> tuple[int, int]:
     return inserted, skipped
 
 
-def main() -> None:
+def main() -> int:
+    """CLI entry point (`uv run seed`): 0 on success, 1 if the database cannot be opened or written."""
     path = db_path_from_env()
-    repository = SupplierRepository(path)
+    try:
+        repository = SupplierRepository(path)
+    except DatabaseFileError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"Error: cannot open the database {path}: {error.strerror or error}", file=sys.stderr)
+        return 1
     try:
         inserted, skipped = seed(repository)
+    except OSError as error:
+        print(f"Error: cannot write to the database {path}: {error.strerror or error}", file=sys.stderr)
+        return 1
     finally:
         repository.close()
     print(f"Seed completed on {path}: {inserted} inserted, {skipped} skipped (already present).")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
