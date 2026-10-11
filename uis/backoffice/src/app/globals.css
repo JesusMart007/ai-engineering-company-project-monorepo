@@ -127,4 +127,4 @@ label.highlight select { border: 2px solid #d98e04; }
 table.incidents td { vertical-align: top; }
 table.incidents tr.pending td { opacity: .6; }
 .status-actions { display: flex; flex-wrap: wrap; gap: .3rem; }
-.totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 1rem; }
+.totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 0 2rem; }
