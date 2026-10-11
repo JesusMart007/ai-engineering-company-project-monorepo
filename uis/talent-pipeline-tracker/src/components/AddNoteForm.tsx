@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getUserMessage } from '../utils/errors';
 
 interface AddNoteFormProps {
   onAddNote: (content: string) => Promise<void>;
@@ -24,11 +25,7 @@ export const AddNoteForm: React.FC<AddNoteFormProps> = ({
       await onAddNote(content.trim());
       setContent('');
     } catch (err) {
-      if (err instanceof Error) {
-        setFormError(err.message);
-      } else {
-        setFormError('Error al guardar la nota.');
-      }
+      setFormError(getUserMessage(err));
     }
   };
 

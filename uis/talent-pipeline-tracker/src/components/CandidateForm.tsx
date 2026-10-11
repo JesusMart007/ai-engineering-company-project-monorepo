@@ -7,6 +7,7 @@ import {
   getCandidateLinkedin,
   getCandidateCv,
 } from '../utils/candidateUtils';
+import { getUserMessage } from '../utils/errors';
 
 interface CandidateFormProps {
   initialData?: Candidate | null;
@@ -133,11 +134,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
     try {
       await onSubmit(formData);
     } catch (err) {
-      if (err instanceof Error) {
-        setSubmitError(err.message);
-      } else {
-        setSubmitError('Ocurrió un error al guardar la candidatura.');
-      }
+      setSubmitError(getUserMessage(err));
     } finally {
       setSubmitting(false);
     }

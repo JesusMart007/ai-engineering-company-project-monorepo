@@ -12,6 +12,7 @@ import StageFilter from '../components/StageFilter';
 import CandidateList from '../components/CandidateList';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
+import { getUserMessage } from '../utils/errors';
 
 function CandidatePipelineContent() {
   const router = useRouter();
@@ -33,11 +34,7 @@ function CandidatePipelineContent() {
       const data = await getCandidates();
       setCandidates(data);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Error al obtener el listado de candidaturas.');
-      }
+      setError(getUserMessage(err));
     } finally {
       setLoading(false);
     }
