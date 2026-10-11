@@ -7,6 +7,7 @@ be used as a bearer token, nor a session token as a reset link.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,8 @@ from config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, RESET_TOKEN_EXPIRE_MI
 ACCESS_TOKEN_TYPE = "access"
 RESET_TOKEN_TYPE = "password_reset"
 
+logger = logging.getLogger(__name__)
+
 
 class InvalidToken(Exception):
     pass
@@ -29,7 +32,12 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
-    return bcrypt.verify(password, hashed_password)
+    """False for a wrong password, and also for a stored hash that is not valid bcrypt."""
+    try:
+        return bcrypt.verify(password, hashed_password)
+    except (ValueError, TypeError):
+        logger.warning("A stored password hash is not a valid bcrypt hash; the check fails")
+        return False
 
 
 def _decode(token: str, expected_type: str) -> dict:
