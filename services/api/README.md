@@ -74,6 +74,7 @@ Los tests usan bases TinyDB temporales (`tmp_path`) vía `SUPPLIERS_DB_PATH`, `U
 | `SECRET_KEY`        | — (obligatoria)                               | Clave con la que se firman los JWT.                                          |
 | `ALGORITHM`         | — (obligatoria, p. ej. `HS256`)               | Algoritmo de firma JWT.                                                      |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | — (obligatoria, p. ej. `30`)        | Validez del token de acceso.                                                 |
+| `LOG_LEVEL`         | `INFO`                                        | Nivel de log de la aplicación (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Un valor desconocido usa `INFO`. |
 | `CORS_ORIGINS`      | `http://localhost:3000,http://127.0.0.1:3000` | Orígenes permitidos (separados por comas), p. ej. la URL del backoffice.     |
 | `RESEND_API_KEY`    | — (vacía: los emails no se envían y se registra el error) | Clave de [Resend](https://resend.com/api-keys) para el email de restablecimiento. Solo en `.env`. |
 | `EMAIL_FROM`        | `onboarding@resend.dev`                       | Remitente. Con `onboarding@resend.dev`, Resend solo entrega al email de tu cuenta de Resend; para otros destinatarios hay que verificar un dominio. |
@@ -249,7 +250,13 @@ Solo en estas rutas (`route_class=IncidentRoute`), los errores de validación so
 {"detail": "Datos no válidos", "errors": [{"field": "title", "message": "El título es obligatorio"}]}
 ```
 
-Las excepciones no controladas devuelven `500 {"detail": "Ha ocurrido un error inesperado"}` sin stack trace; el error completo se registra en los logs del servidor (logger `incident_errors`). El resto de rutas (`/users`, `/auth`, `/suppliers`, `/api/incidents/analyze`) mantienen el formato 422 de FastAPI, del que depende el formulario de registro del backoffice.
+El resto de rutas (`/users`, `/auth`, `/suppliers`, `/api/incidents/analyze`) mantienen el formato 422 de FastAPI, del que depende el formulario de registro del backoffice.
+
+### Errores en toda la API (`errors.py`)
+
+- **Excepción no controlada** en cualquier ruta: `500 {"detail": "Ha ocurrido un error inesperado"}` en JSON, sin traceback. El error completo (método, ruta y traceback) va solo al log del servidor (logger `errors`).
+- **422 de validación**: mismo formato de FastAPI (`detail[]` con `loc`, `msg`, `type`, `ctx`) pero **sin `input`**, que devolvía al cliente lo que había enviado (contraseñas, tokens de reset, emails).
+- **Logs**: `LOG_LEVEL` (por defecto `INFO`) fija el nivel de los loggers de la aplicación.
 
 ```bash
 curl -X POST $API/api/incidents -H "$AUTH" -H 'Content-Type: application/json' -d '{
