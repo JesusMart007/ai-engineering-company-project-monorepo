@@ -6,7 +6,9 @@ the same module the CLI (scripts/analyze.py) uses, so both always produce identi
 
 from __future__ import annotations
 
+import csv
 import io
+import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -22,6 +24,8 @@ from nexova_shared.csv_validation import (
     analyze_csv_text,
     write_results_csv,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 CSV_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain", "application/octet-stream"}
@@ -61,6 +65,10 @@ async def analyze_incidents(file: UploadFile = File(...)) -> dict:
     except EmptyCsvError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except CsvFormatError as error:
+        if isinstance(error.__cause__, csv.Error):
+            # The parser's own message is internal detail; it only goes to the log.
+            logger.warning("Uploaded CSV could not be parsed: %s", error.__cause__)
+            raise HTTPException(status_code=422, detail="The file is not a valid CSV") from error
         raise HTTPException(status_code=422, detail=str(error)) from error
     _last_result = result
     return _response(result)

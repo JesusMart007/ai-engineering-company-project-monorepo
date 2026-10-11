@@ -22,13 +22,25 @@ def _required(name: str) -> str:
     return value
 
 
+def _positive_int(name: str, value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        number = 0
+    if number <= 0:
+        raise RuntimeError(f"{name} must be a positive whole number of minutes")
+    return number
+
+
 SECRET_KEY = _required("SECRET_KEY")
 ALGORITHM = _required("ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(_required("ACCESS_TOKEN_EXPIRE_MINUTES"))
+ACCESS_TOKEN_EXPIRE_MINUTES = _positive_int("ACCESS_TOKEN_EXPIRE_MINUTES", _required("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 # Password reset by email (Resend). Without RESEND_API_KEY the API still starts:
 # reset emails then fail and the error is logged (the response never reveals it).
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "").strip() or "onboarding@resend.dev"
 FRONTEND_URL = (os.environ.get("FRONTEND_URL", "").strip() or "http://localhost:3000").rstrip("/")
-RESET_TOKEN_EXPIRE_MINUTES = int(os.environ.get("RESET_TOKEN_EXPIRE_MINUTES", "").strip() or 30)
+RESET_TOKEN_EXPIRE_MINUTES = _positive_int(
+    "RESET_TOKEN_EXPIRE_MINUTES", os.environ.get("RESET_TOKEN_EXPIRE_MINUTES", "").strip() or "30"
+)

@@ -7,6 +7,7 @@ JSON (dates and datetimes in ISO 8601) and turned back into models on read.
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 from collections import Counter
@@ -43,13 +44,34 @@ def incidents_db_path_from_env() -> Path:
     return Path(os.environ.get(INCIDENTS_DB_PATH_ENV) or DEFAULT_INCIDENTS_DB_PATH)
 
 
+class DatabaseFileError(RuntimeError):
+    """A TinyDB file cannot be opened or is not valid JSON."""
+
+
+def open_db(path: Path | str) -> TinyDB:
+    """Open a TinyDB file and read it once, so a corrupt or unreadable file fails
+    here with its name instead of as a bare JSONDecodeError on the first request."""
+    db = TinyDB(path, create_dirs=True, encoding="utf-8", ensure_ascii=False, indent=2)
+    try:
+        db.tables()
+    except json.JSONDecodeError as error:
+        db.close()
+        raise DatabaseFileError(
+            f"{path} is not valid JSON (line {error.lineno}); restore it from a backup or remove it to start empty"
+        ) from error
+    except UnicodeDecodeError as error:
+        db.close()
+        raise DatabaseFileError(f"{path} is not UTF-8 text") from error
+    return db
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
 class SupplierRepository:
     def __init__(self, path: Path | str) -> None:
-        self._db = TinyDB(path, create_dirs=True, encoding="utf-8", ensure_ascii=False, indent=2)
+        self._db = open_db(path)
         self._table = self._db.table("suppliers")
         # TinyDB is not thread-safe and FastAPI runs sync routes in a thread pool.
         self._lock = threading.Lock()
@@ -141,7 +163,7 @@ class IncidentRepository:
     """
 
     def __init__(self, path: Path | str) -> None:
-        self._db = TinyDB(path, create_dirs=True, encoding="utf-8", ensure_ascii=False, indent=2)
+        self._db = open_db(path)
         self._table = self._db.table("incidents")
         self._lock = threading.Lock()
 
@@ -231,7 +253,7 @@ class UserRepository:
     """
 
     def __init__(self, path: Path | str) -> None:
-        self._db = TinyDB(path, create_dirs=True, encoding="utf-8", ensure_ascii=False, indent=2)
+        self._db = open_db(path)
         self._users = self._db.table("users")
         self._profiles = self._db.table("profiles")
         self._reset_tokens = self._db.table("password_reset_tokens")

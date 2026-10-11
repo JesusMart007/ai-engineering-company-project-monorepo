@@ -1,7 +1,9 @@
 """Transactional email through Resend. The API key comes from RESEND_API_KEY (.env), never from code.
 
-Sending never raises: callers run it in the background after answering the
-request, so a failure is logged and the user-facing response stays the same.
+Sending never raises on a Resend failure: callers run it in the background after
+answering the request, so the failure is logged and the user-facing response stays
+the same. Logs name the email by subject and the error by Resend type and code;
+they never include the recipient, the link or the API key.
 """
 
 from __future__ import annotations
@@ -10,10 +12,15 @@ import html
 import logging
 
 import resend
+from resend.exceptions import ResendError
 
 from config import EMAIL_FROM, RESEND_API_KEY
 
 logger = logging.getLogger(__name__)
+
+# The SDK's default is 30 s; a reset email that has not gone out in 10 s is logged as failed.
+RESEND_TIMEOUT_SECONDS = 10
+resend.default_http_client = resend.RequestsClient(timeout=RESEND_TIMEOUT_SECONDS)
 
 BRAND = "Nexova Backoffice"
 
@@ -25,8 +32,13 @@ def _send(to: str, subject: str, html_body: str, text_body: str) -> bool:
     resend.api_key = RESEND_API_KEY
     try:
         resend.Emails.send({"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html_body, "text": text_body})
-    except Exception:
-        logger.exception("Resend could not send email %r", subject)
+    except ResendError as error:
+        # Rejected by Resend (invalid key, validation, rate limit...) or the request itself
+        # failed (network, timeout: error_type "HttpClientError").
+        logger.error("Resend could not send email %r: %s (code %s)", subject, error.error_type, error.code)
+        return False
+    except ValueError:
+        logger.error("Resend SDK rejected the parameters of email %r", subject)
         return False
     return True
 

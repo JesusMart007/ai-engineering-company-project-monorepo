@@ -6,6 +6,7 @@ import { NewPasswordFields, PASSWORDS_DIFFER, passwordsMatch } from "@/component
 import { TextField } from "@/components/TextField";
 import { ApiError } from "@/lib/apiClient";
 import { changePassword } from "@/lib/authApi";
+import { getUserMessage } from "@/lib/errors";
 
 export default function ChangePasswordPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -31,7 +32,7 @@ export default function ChangePasswordPage() {
       setNotice("Contraseña actualizada. Úsala la próxima vez que inicies sesión.");
     } catch (reason) {
       if (reason instanceof ApiError && Object.keys(reason.fieldErrors).length) setFieldErrors(reason.fieldErrors);
-      else setError(reason instanceof ApiError ? reason.messages.join(" ") : "Error inesperado");
+      else setError(getUserMessage(reason));
     } finally {
       setSaving(false);
     }

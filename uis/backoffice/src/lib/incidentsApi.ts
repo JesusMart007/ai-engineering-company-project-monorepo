@@ -1,4 +1,5 @@
-import { apiFetch, apiJson, type ApiOptions } from "@/lib/apiClient";
+import { ApiError, apiFetch, apiJson, type ApiOptions } from "@/lib/apiClient";
+import { statusMessage } from "@/lib/errors";
 
 export { ApiError } from "@/lib/apiClient";
 
@@ -19,19 +20,52 @@ export type AnalysisResult = {
   labels: { rules: Record<string, string>; problems: Record<string, string>; scores: Record<string, string> };
 };
 
+const ANALYSIS_ERRORS: Record<number, string> = {
+  400: "El archivo está vacío o no está guardado en UTF-8.",
+  413: "El archivo supera el límite de 5 MB.",
+  415: "Solo se aceptan archivos .csv.",
+  422: "El archivo no tiene el formato esperado: usa el CSV exportado del helpdesk, con todas sus columnas.",
+};
+/** Uploads can take longer than a regular call. */
+const ANALYSIS_TIMEOUT_MS = 60_000;
+
 export async function analyzeIncidents(file: File): Promise<AnalysisResult> {
   const body = new FormData();
   body.append("file", file);
-  return apiJson<AnalysisResult>("/api/incidents/analyze", {
-    method: "POST",
-    body,
-    fallback: "No se pudo analizar el archivo",
-  });
+  try {
+    return await apiJson<AnalysisResult>("/api/incidents/analyze", {
+      method: "POST",
+      body,
+      fallback: "No se pudo analizar el archivo",
+      signal: AbortSignal.timeout(ANALYSIS_TIMEOUT_MS),
+    });
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.kind === "http" && ANALYSIS_ERRORS[reason.status]) {
+      throw new ApiError(reason.status, [ANALYSIS_ERRORS[reason.status]]);
+    }
+    throw reason;
+  }
 }
 
 export async function downloadResultsCsv(): Promise<void> {
-  const response = await apiFetch("/api/incidents/results/export", { fallback: "No se pudo descargar el CSV" });
-  const url = URL.createObjectURL(await response.blob());
+  const fallback = "No se pudo descargar el CSV";
+  let response: Response;
+  try {
+    response = await apiFetch("/api/incidents/results/export", { fallback });
+  } catch (reason) {
+    // 404: the server no longer has the analysis (e.g. it restarted).
+    if (reason instanceof ApiError && reason.status === 404) {
+      throw new ApiError(404, ["El análisis ya no está disponible en el servidor. Vuelve a subir el archivo."]);
+    }
+    throw reason;
+  }
+  let blob: Blob;
+  try {
+    blob = await response.blob();
+  } catch {
+    throw new ApiError(response.status, [`${fallback}. ${statusMessage(0, "network")}`], {}, "network");
+  }
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = "results.csv";
@@ -157,11 +191,9 @@ export type IncidentTotals = {
   by_branch: Record<Branch, number>;
 };
 
-/** Requests that take longer than this fail like a dropped connection (ApiError with status 0). */
-const REQUEST_TIMEOUT_MS = 15_000;
-
+// Timeouts come from apiFetch (DEFAULT_TIMEOUT_MS).
 function incidentRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  return apiJson<T>(`/api/incidents${path}`, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  return apiJson<T>(`/api/incidents${path}`, options);
 }
 
 export function createIncident(input: IncidentInput): Promise<Incident> {

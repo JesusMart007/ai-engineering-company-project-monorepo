@@ -3,15 +3,14 @@
 IncidentRoute is used as the route_class of that router only, so:
 - validation errors become 400 {"detail", "errors": [{"field", "message"}]} with
   messages in plain Spanish, instead of FastAPI's 422;
-- unexpected exceptions become a generic 500 with no stack trace, which is
-  logged in full on the server.
+- unexpected exceptions become the app-wide generic 500 (errors.py), logged
+  in full on the server.
 Every other router (users, auth, suppliers, CSV analysis) keeps FastAPI's 422
 format, which the backoffice sign-up form relies on.
 """
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Coroutine
 from enum import StrEnum
 from typing import Any
@@ -22,12 +21,10 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException
 
+from errors import unexpected_error_response
 from nexova_shared.incidents import Branch, IncidentCategory, IncidentOrigin, IncidentStatus
 
-logger = logging.getLogger(__name__)
-
 VALIDATION_DETAIL = "Datos no válidos"
-UNEXPECTED_DETAIL = "Ha ocurrido un error inesperado"
 
 # Field -> (subject with its article, adjective ending for gender agreement).
 FIELDS: dict[str, tuple[str, str]] = {
@@ -103,7 +100,6 @@ class IncidentRoute(APIRoute):
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Unexpected error in %s %s", request.method, request.url.path)
-                return JSONResponse(status_code=500, content={"detail": UNEXPECTED_DETAIL})
+                return unexpected_error_response(request)
 
         return handle

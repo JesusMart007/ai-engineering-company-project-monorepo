@@ -5,6 +5,7 @@ Run with `uv run uvicorn main:app --reload` from services/api.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -20,8 +21,17 @@ from database import (
     incidents_db_path_from_env,
     users_db_path_from_env,
 )
+from errors import register_error_handlers
 from routes import auth, incident_manager, incidents, profiles, suppliers, users
 from seed import seed
+
+# Application loggers (errors, incident_errors, email_service...) propagate to the root
+# logger, which uvicorn leaves unconfigured. Tracebacks of unexpected errors go here.
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").strip().upper()
+logging.basicConfig(
+    level=LOG_LEVEL if LOG_LEVEL in logging.getLevelNamesMapping() else logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 ALLOWED_ORIGINS = [
     origin.strip()
@@ -49,6 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Nexova API", lifespan=lifespan)
+register_error_handlers(app)
 app.include_router(suppliers.router)
 app.include_router(incidents.router)
 app.include_router(incident_manager.router)

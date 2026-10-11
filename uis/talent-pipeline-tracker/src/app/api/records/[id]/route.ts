@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { mockCandidates } from '../store';
+import { readJsonObject } from '../body';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -30,20 +31,15 @@ export async function PATCH(request: Request, { params }: Params) {
     );
   }
 
-  try {
-    const body = await request.json();
-    mockCandidates[index] = {
-      ...mockCandidates[index],
-      ...body,
-      updated_at: new Date().toISOString(),
-    };
-    return NextResponse.json(mockCandidates[index]);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Error al actualizar candidatura.' },
-      { status: 400 }
-    );
-  }
+  const body = await readJsonObject(request);
+  if (body instanceof NextResponse) return body;
+
+  mockCandidates[index] = {
+    ...mockCandidates[index],
+    ...body,
+    updated_at: new Date().toISOString(),
+  };
+  return NextResponse.json(mockCandidates[index]);
 }
 
 export async function PUT(request: Request, { params }: Params) {

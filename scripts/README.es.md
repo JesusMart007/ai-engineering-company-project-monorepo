@@ -30,6 +30,18 @@ uv run --project services/api python scripts/seed_incidents.py otro.csv   # u ot
 
 Es **idempotente**: el `ticket_id` se guarda como `source_id` (único) y las filas ya cargadas se saltan. Al terminar imprime insertadas, ya existentes e inválidas, con la fila y el motivo de cada inválida (nunca imprime emails). Con el CSV de prueba: 96 insertadas y 4 inválidas (filas 18, 44, 87 y 91); una segunda ejecución inserta 0 y salta 96.
 
+### Errores y códigos de salida
+
+| Situación | Salida |
+| --- | --- |
+| Ejecución correcta (aunque haya filas inválidas, que se reportan y no detienen el proceso) | `0` |
+| CSV inexistente, vacío, no UTF-8, con cabeceras incorrectas o ilegible | mensaje en stderr y `1` |
+| Base de datos corrupta, sin permisos o que no se puede escribir (`seed_incidents.py`) | mensaje en stderr y `1` |
+| No se puede escribir `results.csv` (`analyze.py`) | mensaje en stderr y `1` |
+| Ctrl+C | `130` |
+
+Ningún mensaje de error incluye emails, contenido del CSV ni secretos. Si el seed se corta a mitad, las filas ya insertadas se saltan en la siguiente ejecución.
+
 ### Tests
 
 ```bash

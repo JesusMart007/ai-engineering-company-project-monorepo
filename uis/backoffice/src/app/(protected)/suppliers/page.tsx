@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { SupplierForm } from "@/components/SupplierForm";
 import { SupplierRow } from "@/components/SupplierRow";
+import { getUserMessage } from "@/lib/errors";
 import {
-  ApiError,
   CATEGORIES,
   CATEGORY_LABELS,
   COUNTRIES,
@@ -33,7 +33,7 @@ export default function SuppliersPage() {
     } catch (reason) {
       // Never show the previous list under filters it doesn't match.
       setSuppliers([]);
-      setError(reason instanceof ApiError ? reason.messages.join(" ") : "Error inesperado");
+      setError(getUserMessage(reason));
     } finally {
       setLoading(false);
     }
@@ -92,12 +92,17 @@ export default function SuppliersPage() {
 
       <div aria-live="polite">
         {notice && <p className="success">{notice}</p>}
-        {error && <p className="error" role="alert">{error}</p>}
+        {error && (
+          <div className="state" role="alert">
+            <p className="error">{error}</p>
+            <button type="button" onClick={load} disabled={loading}>Reintentar</button>
+          </div>
+        )}
       </div>
 
       <section className="card">
         <p className="muted small">
-          {loading ? "Cargando…" : `${suppliers.length} proveedores · ${activeCount} activos · ${suppliers.length - activeCount} suspendidos`}
+          {loading ? <><span className="spinner" aria-hidden="true" />Cargando…</> : `${suppliers.length} proveedores · ${activeCount} activos · ${suppliers.length - activeCount} suspendidos`}
         </p>
         <table className="suppliers">
           <thead>
@@ -122,7 +127,7 @@ export default function SuppliersPage() {
                 onError={setError}
               />
             ))}
-            {!loading && suppliers.length === 0 && (
+            {!loading && !error && suppliers.length === 0 && (
               <tr><td colSpan={8} className="muted">No hay proveedores que coincidan con los filtros.</td></tr>
             )}
           </tbody>

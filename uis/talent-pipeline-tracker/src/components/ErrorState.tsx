@@ -1,4 +1,6 @@
 import React from 'react';
+import Link from 'next/link';
+import { SUPPORT_EMAIL } from '../utils/errors';
 
 interface ErrorStateProps {
   message: string;
@@ -12,7 +14,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   title = 'Ha ocurrido un error',
 }) => {
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-6 my-4 dark:border-red-900/50 dark:bg-red-950/40 text-red-900 dark:text-red-200">
+    <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-6 my-4 dark:border-red-900/50 dark:bg-red-950/40 text-red-900 dark:text-red-200">
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 text-red-600 dark:text-red-400 mt-0.5">
           <svg
@@ -34,14 +36,29 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
             {title}
           </h3>
           <p className="mt-1 text-sm text-red-800 dark:text-red-200">{message}</p>
-          {onRetry && (
-            <button
-              onClick={onRetry}
-              className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium text-sm rounded-lg transition-colors shadow-sm cursor-pointer"
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium text-sm rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                Reintentar
+              </button>
+            )}
+            <Link
+              href="/"
+              className="px-4 py-2 border border-red-300 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40 font-medium text-sm rounded-lg transition-colors"
             >
-              Reintentar
-            </button>
-          )}
+              Volver al inicio
+            </Link>
+          </div>
+          <p className="mt-3 text-xs text-red-700 dark:text-red-300">
+            Si el problema continúa, escríbenos a{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="underline">
+              {SUPPORT_EMAIL}
+            </a>
+            .
+          </p>
         </div>
       </div>
     </div>

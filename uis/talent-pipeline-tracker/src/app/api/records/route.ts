@@ -1,37 +1,44 @@
 import { NextResponse } from 'next/server';
 import { mockCandidates } from './store';
 import { CandidateDetail } from '../../../types/candidate';
+import { readJsonObject } from './body';
+
+const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 export async function GET() {
   return NextResponse.json(mockCandidates);
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const newId = `cand-${Date.now()}`;
-    const newCandidate: CandidateDetail = {
-      id: newId,
-      name: body.name || body.full_name || 'Candidato sin nombre',
-      full_name: body.name || body.full_name || 'Candidato sin nombre',
-      email: body.email || '',
-      phone: body.phone || body.phone_number || '',
-      position: body.position || body.job_title || 'Puesto no especificado',
-      status: body.status || 'active',
-      stage: body.stage || 'applied',
-      linkedin: body.linkedin || body.linkedin_url || '',
-      cv: body.cv || body.cv_url || '',
-      years_of_experience: Number(body.years_of_experience) || 0,
-      applied_at: new Date().toISOString(),
-      notes: [],
-    };
+  const body = await readJsonObject(request);
+  if (body instanceof NextResponse) return body;
 
-    mockCandidates.unshift(newCandidate);
-    return NextResponse.json(newCandidate, { status: 201 });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Error al procesar la solicitud de creación.' },
-      { status: 400 }
-    );
+  const errors = [
+    !text(body.name) && !text(body.full_name) && { field: 'name', message: 'El nombre es obligatorio.' },
+    !text(body.email) && { field: 'email', message: 'El correo electrónico es obligatorio.' },
+    !text(body.position) && !text(body.job_title) && { field: 'position', message: 'El puesto es obligatorio.' },
+  ].filter(Boolean);
+  if (errors.length > 0) {
+    return NextResponse.json({ error: 'Faltan datos obligatorios.', errors }, { status: 400 });
   }
+
+  const name = text(body.name) || text(body.full_name);
+  const newCandidate: CandidateDetail = {
+    id: `cand-${Date.now()}`,
+    name,
+    full_name: name,
+    email: text(body.email),
+    phone: text(body.phone) || text(body.phone_number),
+    position: text(body.position) || text(body.job_title),
+    status: text(body.status) || 'active',
+    stage: text(body.stage) || 'applied',
+    linkedin: text(body.linkedin) || text(body.linkedin_url),
+    cv: text(body.cv) || text(body.cv_url),
+    years_of_experience: Number(body.years_of_experience) || 0,
+    applied_at: new Date().toISOString(),
+    notes: [],
+  };
+
+  mockCandidates.unshift(newCandidate);
+  return NextResponse.json(newCandidate, { status: 201 });
 }

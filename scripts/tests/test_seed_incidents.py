@@ -68,3 +68,36 @@ def test_cli_prints_summary_without_emails(tmp_path):
     assert "Ya existentes (saltadas) ...........   96" in second.stdout
     assert "Fila   87: Invalid or missing email" in first.stdout
     assert "@" not in first.stdout + first.stderr
+
+
+def _run_seed(tmp_path, *args: str, db: Path | None = None) -> subprocess.CompletedProcess:
+    env = {**os.environ, "INCIDENTS_DB_PATH": str(db or tmp_path / "incidents.json")}
+    return subprocess.run([sys.executable, str(SCRIPTS / "seed_incidents.py"), *args], capture_output=True, text=True, env=env)
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (None, "file not found"),
+        ("", "The CSV file is empty"),
+        ("id,name\n1,x\n", "missing required columns"),
+    ],
+)
+def test_cli_critical_input_errors_exit_1_with_a_message(tmp_path, content, message):
+    csv_path = tmp_path / "input.csv"
+    if content is not None:
+        csv_path.write_text(content, encoding="utf-8")
+    completed = _run_seed(tmp_path, str(csv_path))
+    assert completed.returncode == 1
+    assert message in completed.stderr
+    assert "Traceback" not in completed.stderr
+    assert not (tmp_path / "incidents.json").exists()
+
+
+def test_cli_corrupt_database_exits_1_without_traceback(tmp_path):
+    db = tmp_path / "incidents.json"
+    db.write_text("{corrupt", encoding="utf-8")
+    completed = _run_seed(tmp_path, db=db)
+    assert completed.returncode == 1
+    assert "incidents.json is not valid JSON" in completed.stderr
+    assert "Traceback" not in completed.stderr

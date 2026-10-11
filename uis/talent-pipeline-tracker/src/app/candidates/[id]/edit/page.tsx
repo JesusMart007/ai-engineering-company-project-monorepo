@@ -8,6 +8,7 @@ import { getCandidateById, updateCandidate } from '../../../../services/candidat
 import CandidateForm from '../../../../components/CandidateForm';
 import LoadingState from '../../../../components/LoadingState';
 import ErrorState from '../../../../components/ErrorState';
+import { getUserMessage } from '../../../../utils/errors';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,17 +31,15 @@ export default function EditCandidatePage({ params }: PageProps) {
       const data = await getCandidateById(candidateId);
       setCandidate(data);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Error al obtener la información del candidato.');
-      }
+      setError(getUserMessage(err));
     } finally {
       setLoading(false);
     }
   }, [candidateId]);
 
   useEffect(() => {
+    // Fetching on mount is the point of this effect; the fetch flags "loading" first.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCandidate();
   }, [fetchCandidate]);
 

@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from database import IncidentRepository, SourceIdAlreadyExists, incidents_db_path_from_env
+from database import DatabaseFileError, IncidentRepository, SourceIdAlreadyExists, incidents_db_path_from_env
 from incident_models import IncidentRecord
 from nexova_shared.csv_validation import CsvFormatError, read_csv_rows
 from nexova_shared.incidents import csv_row_to_incident
@@ -89,9 +89,20 @@ def main() -> int:
         return 1
 
     target = incidents_db_path_from_env()
-    repository = IncidentRepository(target)
+    try:
+        repository = IncidentRepository(target)
+    except DatabaseFileError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"Error: cannot open the database {target}: {error.strerror or error}", file=sys.stderr)
+        return 1
     try:
         report = seed_incidents(rows, repository)
+    except OSError as error:
+        # Rows inserted before the failure stay; running the seed again skips them.
+        print(f"Error: cannot write to the database {target}: {error.strerror or error}", file=sys.stderr)
+        return 1
     finally:
         repository.close()
     print_report(report, source, target)
@@ -99,4 +110,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("\nInterrumpido. Las filas ya insertadas se saltarán en la próxima ejecución.", file=sys.stderr)
+        raise SystemExit(130) from None

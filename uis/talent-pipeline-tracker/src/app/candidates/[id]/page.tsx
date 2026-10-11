@@ -18,6 +18,7 @@ import AddNoteForm from '../../../components/AddNoteForm';
 import NotesList from '../../../components/NotesList';
 import LoadingState from '../../../components/LoadingState';
 import ErrorState from '../../../components/ErrorState';
+import { getUserMessage } from '../../../utils/errors';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -56,11 +57,7 @@ export default function CandidateDetailPage({ params }: PageProps) {
         setNotes(data.notes);
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setCandidateError(err.message);
-      } else {
-        setCandidateError('Error al cargar la información del candidato.');
-      }
+      setCandidateError(getUserMessage(err));
     } finally {
       setLoadingCandidate(false);
     }
@@ -75,17 +72,15 @@ export default function CandidateDetailPage({ params }: PageProps) {
       const notesData = await getNotes(candidateId);
       setNotes(notesData);
     } catch (err) {
-      if (err instanceof Error) {
-        setNotesError(err.message);
-      } else {
-        setNotesError('Error al cargar las notas del candidato.');
-      }
+      setNotesError(getUserMessage(err));
     } finally {
       setLoadingNotes(false);
     }
   }, [candidateId]);
 
   useEffect(() => {
+    // Fetching on mount is the point of this effect; the fetch flags "loading" first.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCandidate();
     fetchNotes();
   }, [fetchCandidate, fetchNotes]);
@@ -104,11 +99,7 @@ export default function CandidateDetailPage({ params }: PageProps) {
       setActionSuccess('Estado actualizado con éxito.');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Error al actualizar el estado: ${err.message}`);
-      } else {
-        setActionError('Error al actualizar el estado del candidato.');
-      }
+      setActionError(getUserMessage(err));
     } finally {
       setUpdatingStatus(false);
     }
@@ -128,11 +119,7 @@ export default function CandidateDetailPage({ params }: PageProps) {
       setActionSuccess('Etapa actualizada con éxito.');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Error al actualizar la etapa: ${err.message}`);
-      } else {
-        setActionError('Error al actualizar la etapa del candidato.');
-      }
+      setActionError(getUserMessage(err));
     } finally {
       setUpdatingStage(false);
     }
@@ -149,11 +136,7 @@ export default function CandidateDetailPage({ params }: PageProps) {
       setTimeout(() => setActionSuccess(null), 3000);
       await fetchNotes();
     } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Error al crear la nota: ${err.message}`);
-      } else {
-        setActionError('Error al crear la nota.');
-      }
+      // AddNoteForm shows the message next to the note, so it is not repeated in the banner.
       throw err;
     } finally {
       setAddingNote(false);
@@ -173,11 +156,7 @@ export default function CandidateDetailPage({ params }: PageProps) {
       setActionSuccess('Nota eliminada correctamente.');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Error al eliminar la nota: ${err.message}`);
-      } else {
-        setActionError('Error al eliminar la nota.');
-      }
+      setActionError(getUserMessage(err));
     } finally {
       setDeletingNoteId(null);
     }

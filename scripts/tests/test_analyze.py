@@ -38,3 +38,24 @@ def test_cli_reports_missing_file(tmp_path):
     )
     assert completed.returncode == 1
     assert "file not found" in completed.stderr
+
+
+def test_cli_export_failure_exits_1_without_traceback(tmp_path):
+    (tmp_path / "results.csv").mkdir()  # a directory where the file should go: the write fails
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPTS / "analyze.py"), str(CSV_PATH)],
+        input="s\n",
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
+    assert completed.returncode == 1
+    assert "could not write results.csv" in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
+def test_cli_without_export_exits_0(tmp_path):
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPTS / "analyze.py"), str(CSV_PATH)], input="n\n", capture_output=True, text=True, cwd=tmp_path
+    )
+    assert completed.returncode == 0

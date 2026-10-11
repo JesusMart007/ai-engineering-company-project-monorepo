@@ -45,7 +45,7 @@ function InvalidRecords({ result }: { result: AnalysisResult }) {
   if (result.invalid_records === 0) {
     return <section className="card ok"><h2>Registros inválidos</h2><p>No se encontraron registros inválidos.</p></section>;
   }
-  const problems = Object.entries(result.invalid_by_field).flatMap(([field, kinds]) =>
+  const problems = Object.entries(result.invalid_by_field ?? {}).flatMap(([field, kinds]) =>
     Object.entries(kinds).map(([kind, count]) => ({ field, kind: kind as ProblemKind, count: count ?? 0 })),
   );
   return (
@@ -56,8 +56,8 @@ function InvalidRecords({ result }: { result: AnalysisResult }) {
         <div>
           <h3>Por regla</h3>
           <table><tbody>
-            {Object.entries(result.invalid_breakdown).map(([rule, count]) => (
-              <tr key={rule}><td>{RULE_LABELS[rule] ?? result.labels.rules[rule] ?? rule}</td><td className="num">{count}</td></tr>
+            {Object.entries(result.invalid_breakdown ?? {}).map(([rule, count]) => (
+              <tr key={rule}><td>{RULE_LABELS[rule] ?? result.labels?.rules?.[rule] ?? rule}</td><td className="num">{count}</td></tr>
             ))}
           </tbody></table>
         </div>
@@ -88,7 +88,7 @@ function Satisfaction({ result }: { result: AnalysisResult }) {
         <tbody>
           {Object.entries(result.score_breakdown).map(([score, count]) => (
             <tr key={score}>
-              <td>{score} · {SCORE_LABELS[score] ?? result.labels.scores[score]}</td>
+              <td>{score} · {SCORE_LABELS[score] ?? result.labels?.scores?.[score] ?? "—"}</td>
               <td className="num">{count}</td>
               <td className="bar-cell" aria-hidden="true"><span className="bar" style={{ width: `${(count / maxCount) * 100}%` }} /></td>
             </tr>

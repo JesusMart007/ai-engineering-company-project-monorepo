@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { mockCandidates } from '../../store';
+import { readJsonObject } from '../../body';
 import { Note } from '../../../../../types/candidate';
 
 interface Params {
@@ -31,31 +32,27 @@ export async function POST(request: Request, { params }: Params) {
     );
   }
 
-  try {
-    const body = await request.json();
-    if (!body.content) {
-      return NextResponse.json(
-        { error: 'El contenido de la nota es requerido.' },
-        { status: 400 }
-      );
-    }
+  const body = await readJsonObject(request);
+  if (body instanceof NextResponse) return body;
 
-    const newNote: Note = {
-      id: `note-${Date.now()}`,
-      content: body.content,
-      createdAt: new Date().toISOString(),
-    };
-
-    if (!candidate.notes) {
-      candidate.notes = [];
-    }
-    candidate.notes.unshift(newNote);
-
-    return NextResponse.json(newNote, { status: 201 });
-  } catch (error) {
+  const content = typeof body.content === 'string' ? body.content.trim() : '';
+  if (!content) {
     return NextResponse.json(
-      { error: 'Error al crear la nota.' },
+      { error: 'El contenido de la nota es requerido.', errors: [{ field: 'content', message: 'La nota no puede estar vacía.' }] },
       { status: 400 }
     );
   }
+
+  const newNote: Note = {
+    id: `note-${Date.now()}`,
+    content,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!candidate.notes) {
+    candidate.notes = [];
+  }
+  candidate.notes.unshift(newNote);
+
+  return NextResponse.json(newNote, { status: 201 });
 }

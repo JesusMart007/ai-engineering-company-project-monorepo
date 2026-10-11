@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -203,3 +204,33 @@ def test_reset_email_is_mobile_friendly_and_has_a_text_version():
     assert "Restablecer contraseña" in html_body and "30 minutos" in html_body and "ignora este correo" in html_body
     assert "token=abc&amp;x=1" in html_body  # escaped inside the HTML
     assert link in text_body and "30 minutos" in text_body
+
+
+@pytest.mark.parametrize(
+    ("code", "error_type"),
+    [(403, "invalid_api_key"), (500, "HttpClientError"), (429, "rate_limit_exceeded")],
+)
+def test_resend_failure_is_logged_without_personal_data_and_still_200(anon_client, monkeypatch, caplog, code, error_type):
+    import resend
+    from resend.exceptions import ResendError
+
+    register(anon_client, "resend-fails@nexova.example")
+    monkeypatch.setattr(email_service, "RESEND_API_KEY", "re_test_key_not_real")
+
+    def fail(_params):
+        raise ResendError(code=code, error_type=error_type, message="boom", suggested_action="retry")
+
+    monkeypatch.setattr(resend.Emails, "send", fail)
+    with caplog.at_level(logging.ERROR, logger="email_service"):
+        response = anon_client.post("/auth/forgot-password", json={"email": "resend-fails@nexova.example"})
+    assert response.status_code == 200
+    assert f"{error_type} (code {code})" in caplog.text
+    assert "resend-fails@nexova.example" not in caplog.text
+    assert "re_test_key_not_real" not in caplog.text
+    assert "token=" not in caplog.text
+
+
+def test_resend_client_has_an_explicit_timeout():
+    import resend
+
+    assert resend.default_http_client._timeout == email_service.RESEND_TIMEOUT_SECONDS == 10

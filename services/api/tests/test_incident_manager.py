@@ -194,7 +194,7 @@ def test_unexpected_errors_give_generic_500_and_are_logged(auth_client, monkeypa
         raise RuntimeError("database file corrupted at /secret/path")
 
     monkeypatch.setattr(auth_client.app.state.incident_repository, "summary", explode)
-    with caplog.at_level(logging.ERROR, logger="incident_errors"):
+    with caplog.at_level(logging.ERROR, logger="errors"):
         response = auth_client.get("/api/incidents/summary")
     assert response.status_code == 500
     assert response.json() == {"detail": "Ha ocurrido un error inesperado"}

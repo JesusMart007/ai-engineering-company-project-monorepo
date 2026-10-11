@@ -1,4 +1,5 @@
 import { ApiError, apiJson } from "@/lib/apiClient";
+import { statusMessage } from "@/lib/errors";
 
 export type ProfileFields = { name: string | null; phone: string | null; address: string | null };
 
@@ -28,6 +29,9 @@ export async function login(email: string, password: string): Promise<string> {
       auth: false,
       fallback: "No se pudo iniciar sesión",
     });
+    if (typeof access_token !== "string" || !access_token) {
+      throw new ApiError(200, [`No se pudo iniciar sesión. ${statusMessage(200, "parse")}`], {}, "parse");
+    }
     return access_token;
   } catch (reason) {
     if (reason instanceof ApiError && reason.status === 401) {
