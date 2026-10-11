@@ -41,6 +41,8 @@ function CandidatePipelineContent() {
   }, []);
 
   useEffect(() => {
+    // Fetching on mount is the point of this effect; the fetch flags "loading" first.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCandidatesData();
   }, [fetchCandidatesData]);
 
