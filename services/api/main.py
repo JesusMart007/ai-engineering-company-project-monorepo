@@ -20,7 +20,7 @@ from database import (
     incidents_db_path_from_env,
     users_db_path_from_env,
 )
-from routes import auth, incidents, profiles, suppliers, users
+from routes import auth, incident_manager, incidents, profiles, suppliers, users
 from seed import seed
 
 ALLOWED_ORIGINS = [
@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Nexova API", lifespan=lifespan)
 app.include_router(suppliers.router)
 app.include_router(incidents.router)
+app.include_router(incident_manager.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(profiles.router)
