@@ -7,6 +7,7 @@ import { NewPasswordFields, PASSWORDS_DIFFER, passwordsMatch } from "@/component
 import { ApiError } from "@/lib/apiClient";
 import { clearToken, LOGIN_PATH } from "@/lib/auth";
 import { INVALID_RESET_LINK, resetPassword } from "@/lib/authApi";
+import { getUserMessage } from "@/lib/errors";
 
 function ResetPasswordForm() {
   const token = useSearchParams().get("token") ?? "";
@@ -25,14 +26,17 @@ function ResetPasswordForm() {
     }
     setFieldErrors({});
     setSubmitting(true);
+    let done = false;
     try {
       await resetPassword(token, String(form.get("new_password")));
       clearToken(); // any session in this browser belonged to the old password
+      done = true;
       router.replace(`${LOGIN_PATH}?reset=success`);
     } catch (reason) {
       if (reason instanceof ApiError && Object.keys(reason.fieldErrors).length) setFieldErrors(reason.fieldErrors);
-      else setError(reason instanceof ApiError ? reason.messages.join(" ") : "Error inesperado");
-      setSubmitting(false);
+      else setError(getUserMessage(reason));
+    } finally {
+      if (!done) setSubmitting(false);
     }
   }
 

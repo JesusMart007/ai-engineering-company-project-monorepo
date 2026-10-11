@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { TextField } from "@/components/TextField";
 import { ApiError } from "@/lib/apiClient";
 import { HOME_PATH, setToken } from "@/lib/auth";
+import { getUserMessages } from "@/lib/errors";
 import { login, register, type RegisterInput } from "@/lib/authApi";
 
 const PROFILE_FIELDS = ["name", "phone", "address"] as const;
@@ -28,20 +29,25 @@ export default function RegisterPage() {
     setFieldErrors({});
     setErrors([]);
     setSubmitting(true);
+    let signedIn = false;
     try {
-      await register(input);
-    } catch (reason) {
-      if (reason instanceof ApiError && Object.keys(reason.fieldErrors).length) setFieldErrors(reason.fieldErrors);
-      else setErrors(reason instanceof ApiError ? reason.messages : ["Error inesperado"]);
-      setSubmitting(false);
-      return;
-    }
-    try {
-      setToken(await login(input.email, input.password));
-      router.replace(HOME_PATH);
-    } catch {
-      setErrors(["La cuenta se creó, pero no se pudo iniciar sesión automáticamente. Inicia sesión manualmente."]);
-      setSubmitting(false);
+      try {
+        await register(input);
+      } catch (reason) {
+        if (reason instanceof ApiError && Object.keys(reason.fieldErrors).length) setFieldErrors(reason.fieldErrors);
+        else setErrors(getUserMessages(reason));
+        return;
+      }
+      try {
+        setToken(await login(input.email, input.password));
+        signedIn = true;
+        router.replace(HOME_PATH);
+      } catch {
+        setErrors(["La cuenta se creó, pero no se pudo iniciar sesión automáticamente. Inicia sesión manualmente."]);
+      }
+    } finally {
+      // After a successful sign-in the button stays disabled while the home page loads.
+      if (!signedIn) setSubmitting(false);
     }
   }
 

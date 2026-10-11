@@ -4,8 +4,8 @@ import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TextField } from "@/components/TextField";
-import { ApiError } from "@/lib/apiClient";
 import { HOME_PATH, setToken } from "@/lib/auth";
+import { getUserMessage } from "@/lib/errors";
 import { login } from "@/lib/authApi";
 
 function LoginForm() {
@@ -19,12 +19,16 @@ function LoginForm() {
     const form = new FormData(event.currentTarget);
     setError("");
     setSubmitting(true);
+    let signedIn = false;
     try {
       setToken(await login(String(form.get("email")).trim(), String(form.get("password"))));
+      signedIn = true;
       router.replace(HOME_PATH);
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.messages.join(" ") : "Error inesperado");
-      setSubmitting(false);
+      setError(getUserMessage(reason));
+    } finally {
+      // After a successful sign-in the button stays disabled while the home page loads.
+      if (!signedIn) setSubmitting(false);
     }
   }
 

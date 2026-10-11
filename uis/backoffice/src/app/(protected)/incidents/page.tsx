@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileDrop } from "@/components/FileDrop";
 import { IncidentSummary } from "@/components/IncidentSummary";
+import { getUserMessage, SUPPORT_EMAIL } from "@/lib/errors";
 import { analyzeIncidents, downloadResultsCsv, type AnalysisResult } from "@/lib/incidentsApi";
 
 export default function IncidentsPage() {
@@ -18,7 +19,7 @@ export default function IncidentsPage() {
       setResult(await analyzeIncidents(file));
     } catch (reason) {
       setResult(null);
-      setError(reason instanceof Error ? reason.message : "Error inesperado");
+      setError(getUserMessage(reason));
     } finally {
       setLoading(false);
     }
@@ -30,7 +31,7 @@ export default function IncidentsPage() {
     try {
       await downloadResultsCsv();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Error inesperado");
+      setError(getUserMessage(reason));
     } finally {
       setDownloading(false);
     }
@@ -45,8 +46,15 @@ export default function IncidentsPage() {
       </p>
       <FileDrop onFile={upload} disabled={loading} />
       <div aria-live="polite">
-        {loading && <p>Analizando…</p>}
-        {error && <p className="error" role="alert">{error}</p>}
+        {loading && <p className="state muted"><span className="spinner" aria-hidden="true" />Analizando…</p>}
+        {error && (
+          <div className="notice" role="alert">
+            <p>
+              {error} Puedes volver a seleccionar el archivo arriba. Si el problema continúa, escríbenos a{" "}
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+            </p>
+          </div>
+        )}
       </div>
       {result && (
         <>

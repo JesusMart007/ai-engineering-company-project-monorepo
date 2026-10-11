@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { getUserMessages } from "@/lib/errors";
 import {
-  ApiError,
   CATEGORIES,
   CATEGORY_LABELS,
   COUNTRIES,
@@ -68,7 +68,7 @@ export function SupplierForm({ onCreated, onCancel }: Props) {
       });
       onCreated(supplier);
     } catch (reason) {
-      setErrors(reason instanceof ApiError ? reason.messages : ["Error inesperado"]);
+      setErrors(getUserMessages(reason));
     } finally {
       setSaving(false);
     }

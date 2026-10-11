@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { getUserMessage } from "@/lib/errors";
 import {
-  ApiError,
   CATEGORY_LABELS,
   COUNTRY_LABELS,
   STATUS_LABELS,
@@ -23,9 +23,6 @@ type Props = {
   onError: (message: string) => void;
 };
 
-function errorText(reason: unknown): string {
-  return reason instanceof ApiError ? reason.messages.join(" ") : "Error inesperado";
-}
 
 export function SupplierRow({ supplier, onChange, onDelete, onError }: Props) {
   const [editingRate, setEditingRate] = useState(false);
@@ -39,7 +36,7 @@ export function SupplierRow({ supplier, onChange, onDelete, onError }: Props) {
     try {
       await action();
     } catch (reason) {
-      onError(`${supplier.name}: ${errorText(reason)}`);
+      onError(`${supplier.name}: ${getUserMessage(reason)}`);
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,4 @@
-import { apiJson, type ApiOptions } from "@/lib/apiClient";
+import { ApiError, apiJson, type ApiOptions } from "@/lib/apiClient";
 
 export { ApiError } from "@/lib/apiClient";
 
@@ -75,23 +75,31 @@ export function listSuppliers(filters: SupplierFilters = {}): Promise<Supplier[]
   if (filters.country) params.set("country", filters.country);
   if (filters.category) params.set("category", filters.category);
   const query = params.toString();
-  return request<Supplier[]>(query ? `?${query}` : "");
+  return request<Supplier[]>(query ? `?${query}` : "", { fallback: "No se pudieron cargar los proveedores" });
 }
 
-export function createSupplier(input: SupplierInput): Promise<Supplier> {
-  return request<Supplier>("", { method: "POST", json: input });
+export async function createSupplier(input: SupplierInput): Promise<Supplier> {
+  try {
+    return await request<Supplier>("", { method: "POST", json: input, fallback: "No se pudo registrar el proveedor" });
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.status === 409) {
+      const message = "Ya existe un proveedor con ese nombre.";
+      throw new ApiError(409, [message], { name: message });
+    }
+    throw reason;
+  }
 }
 
 export function updateSupplierRate(id: number, monthlyRate: number): Promise<Supplier> {
-  return request<Supplier>(`/${id}/rate`, { method: "PATCH", json: { monthly_rate: monthlyRate } });
+  return request<Supplier>(`/${id}/rate`, { method: "PATCH", json: { monthly_rate: monthlyRate }, fallback: "No se pudo actualizar la tarifa" });
 }
 
 export function updateSupplierStatus(id: number, status: SupplierStatus): Promise<Supplier> {
-  return request<Supplier>(`/${id}/status`, { method: "PATCH", json: { status } });
+  return request<Supplier>(`/${id}/status`, { method: "PATCH", json: { status }, fallback: "No se pudo cambiar el estado" });
 }
 
 export function deleteSupplier(id: number): Promise<void> {
-  return request<void>(`/${id}`, { method: "DELETE" });
+  return request<void>(`/${id}`, { method: "DELETE", fallback: "No se pudo eliminar el proveedor" });
 }
 
 export function formatMoney(amount: number, currency: Currency): string {

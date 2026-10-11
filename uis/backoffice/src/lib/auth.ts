@@ -1,6 +1,8 @@
 // Client-side session: the JWT from POST /auth/login lives in localStorage.
 // Only call these from client components ("use client"), after hydration.
 
+import { UserFacingError } from "@/lib/errors";
+
 const TOKEN_KEY = "nexova.accessToken";
 // Fired on this tab whenever the token changes; other tabs get the native "storage" event.
 const TOKEN_EVENT = "nexova:token";
@@ -22,7 +24,13 @@ export function getToken(): string | null {
 }
 
 export function setToken(token: string): void {
-  window.localStorage.setItem(TOKEN_KEY, token);
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    throw new UserFacingError(
+      "Tu navegador está bloqueando el almacenamiento de este sitio, así que no podemos mantener la sesión. Permítelo e inténtalo de nuevo.",
+    );
+  }
   notify();
 }
 
