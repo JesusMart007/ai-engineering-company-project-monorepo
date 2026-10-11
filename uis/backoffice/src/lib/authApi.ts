@@ -14,6 +14,8 @@ export const FIELD_LABELS: Record<string, string> = {
   name: "Nombre",
   phone: "Teléfono",
   address: "Dirección",
+  current_password: "Contraseña actual",
+  new_password: "Nueva contraseña",
 };
 
 /** OAuth2 password flow: the API expects a form with the email in `username`, not JSON. */
@@ -61,4 +63,45 @@ export function updateProfile(fields: ProfileFields): Promise<Profile> {
     labels: FIELD_LABELS,
     fallback: "No se pudo guardar el perfil",
   });
+}
+
+/** POST /auth/forgot-password: the API answers the same whether or not the email exists. */
+export async function forgotPassword(email: string): Promise<void> {
+  await apiJson("/auth/forgot-password", { method: "POST", json: { email }, auth: false, fallback: "No se pudo enviar la solicitud" });
+}
+
+export const INVALID_RESET_LINK = "Este enlace no es válido, ha caducado o ya se ha usado.";
+
+/** POST /auth/reset-password with the token from the email link. A 400 means the link cannot be used. */
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  try {
+    await apiJson("/auth/reset-password", {
+      method: "POST",
+      json: { token, new_password: newPassword },
+      auth: false,
+      labels: FIELD_LABELS,
+      fallback: "No se pudo cambiar la contraseña",
+    });
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.status === 400) throw new ApiError(400, [INVALID_RESET_LINK]);
+    throw reason;
+  }
+}
+
+/** POST /auth/change-password for the signed-in user. A 400 means the current password is wrong. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  try {
+    await apiJson("/auth/change-password", {
+      method: "POST",
+      json: { current_password: currentPassword, new_password: newPassword },
+      labels: FIELD_LABELS,
+      fallback: "No se pudo cambiar la contraseña",
+    });
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.status === 400) {
+      const message = "La contraseña actual no es correcta.";
+      throw new ApiError(400, [message], { current_password: message });
+    }
+    throw reason;
+  }
 }

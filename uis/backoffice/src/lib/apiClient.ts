@@ -35,8 +35,10 @@ function issueMessage({ msg, type, ctx }: ValidationIssue): string {
       return `Debe tener al menos ${ctx?.min_length} caracteres`;
     case "string_too_long":
       return `Debe tener como máximo ${ctx?.max_length} caracteres`;
-    default:
-      return (msg ?? "Valor no válido").replace(/^Value error, /, "");
+    default: {
+      const message = (msg ?? "Valor no válido").replace(/^Value error, /, "");
+      return message === "password must be at most 72 bytes" ? "Debe tener como máximo 72 bytes" : message;
+    }
   }
 }
 
