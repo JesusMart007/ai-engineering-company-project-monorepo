@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "Inicio" },
   { href: "/incidents", label: "Análisis de incidencias" },
   { href: "/suppliers", label: "Proveedores" },
+  { href: "/account/profile", label: "Mi perfil" },
 ];
 
 export function NavMenu() {

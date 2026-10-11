@@ -95,3 +95,13 @@ table.suppliers tr.row-suspended td:not(.row-actions) { opacity: .55; }
 .rate-edit { display: flex; gap: .3rem; justify-content: flex-end; }
 .rate-edit input { width: 7rem; padding: .3rem; border: 1px solid #b9c3d6; border-radius: 6px; font: inherit; }
 .row-actions { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; white-space: nowrap; }
+
+/* Accounts: login, register and profile */
+main.narrow { max-width: 480px; }
+.form-stack { display: flex; flex-direction: column; gap: 1rem; }
+.form-stack button { align-self: flex-start; }
+.form-errors p { margin: 0; }
+.field-error { color: #a51c30; font-weight: bold; }
+label input[aria-invalid="true"] { border-color: #a51c30; }
+.topbar .logout { margin-left: auto; background: none; color: #cfd8ea; border: 1px solid #4a5a7a; padding: .35rem .8rem; }
+.topbar .logout:hover { color: white; border-color: #cfd8ea; }

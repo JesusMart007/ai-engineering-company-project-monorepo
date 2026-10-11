@@ -40,6 +40,8 @@ export default function SuppliersPage() {
   }, [country, category]);
 
   useEffect(() => {
+    // Fetching on filter changes is the point of this effect; load() flags "loading" first.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
