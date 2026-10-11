@@ -532,6 +532,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "libpass", extra = ["bcrypt"] },
+    { name = "nexova-shared" },
     { name = "pydantic", extra = ["email"] },
     { name = "python-dotenv" },
     { name = "python-jose", extra = ["cryptography"] },
@@ -551,6 +552,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.110" },
     { name = "libpass", extras = ["bcrypt"], specifier = ">=1.9.3" },
+    { name = "nexova-shared", editable = "../../packages/shared" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.6" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
@@ -565,6 +567,16 @@ dev = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "pytest", specifier = ">=8.0" },
 ]
+
+[[package]]
+name = "nexova-shared"
+version = "0.1.0"
+source = { editable = "../../packages/shared" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0" }]
 
 [[package]]
 name = "opentelemetry-api"

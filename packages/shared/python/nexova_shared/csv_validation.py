@@ -1,7 +1,7 @@
 """Shared, privacy-safe incident CSV validation and analysis logic.
 
-Used by both scripts/analyze.py (CLI) and services/api (FastAPI), so the
-validation rules and metrics live in exactly one place. Field names, categories,
+Used by scripts/analyze.py (CLI), scripts/seed_incidents.py and services/api
+(FastAPI), so the validation rules and metrics live in exactly one place. Field names, categories,
 statuses and ranges come from CONTEXT-nexova.es.md.
 
 Privacy: no function in this module returns, logs or exports field values

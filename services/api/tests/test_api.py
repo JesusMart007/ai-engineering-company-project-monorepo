@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from routes import incidents
-from incident_analysis import analyze_csv_text
+from nexova_shared.csv_validation import analyze_csv_text
 
 CSV_PATH = Path(__file__).resolve().parents[3] / "scripts" / "incidents-nexova.csv"
 

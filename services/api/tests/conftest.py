@@ -6,7 +6,6 @@ import pytest
 
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
-sys.path.insert(0, str(API_ROOT.parents[1] / "scripts"))
 
 # Fixed auth settings for tests; real environment values win over .env, so this
 # never depends on (or touches) the developer's services/api/.env.

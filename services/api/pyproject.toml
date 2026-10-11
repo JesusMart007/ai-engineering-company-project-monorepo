@@ -13,6 +13,7 @@ dependencies = [
     "libpass[bcrypt]>=1.9.3",
     "python-dotenv>=1.2.4",
     "resend>=2.49.1",
+    "nexova-shared",
 ]
 
 [project.scripts]
@@ -36,6 +37,9 @@ only-include = [
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+nexova-shared = { path = "../../packages/shared", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

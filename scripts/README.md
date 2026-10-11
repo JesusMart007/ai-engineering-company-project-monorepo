@@ -6,3 +6,19 @@ This folder contains **helper scripts** for the monorepo: development automation
 - **Recommendation**: document each script (what it does, parameters, requirements, usage examples) and keep them reproducible (and safe) across environments.
 
 > _Spanish version: [README.es.md](./README.es.md)._
+
+## Incident scripts
+
+They run with the API's environment (`services/api`), which installs the shared `nexova_shared` package (`packages/shared`). From the repo root:
+
+### `analyze.py`: helpdesk CSV analyzer
+
+```bash
+uv run --project services/api python scripts/analyze.py scripts/incidents-nexova.csv
+```
+
+### Tests
+
+```bash
+uv run --project services/api pytest scripts/tests
+```
