@@ -103,3 +103,5 @@ main.narrow { max-width: 480px; }
 .form-errors p { margin: 0; }
 .field-error { color: #a51c30; font-weight: bold; }
 label input[aria-invalid="true"] { border-color: #a51c30; }
+.topbar .logout { margin-left: auto; background: none; color: #cfd8ea; border: 1px solid #4a5a7a; padding: .35rem .8rem; }
+.topbar .logout:hover { color: white; border-color: #cfd8ea; }
