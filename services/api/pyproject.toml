@@ -23,6 +23,8 @@ seed = "seed:main"
 dev = [
     "pytest>=8.0",
     "httpx>=0.27",
+    "pytest-cov>=7.1.0",
+    "freezegun>=1.5.5",
 ]
 
 [build-system]

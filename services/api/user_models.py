@@ -17,13 +17,19 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 Email = Annotated[EmailStr, AfterValidator(str.lower)]
 
 
+def _not_blank(password: str) -> str:
+    if not password.strip():
+        raise ValueError("password must not be blank")
+    return password
+
+
 def _fits_bcrypt(password: str) -> str:
     if len(password.encode("utf-8")) > 72:
         raise ValueError("password must be at most 72 bytes")
     return password
 
 
-Password = Annotated[str, Field(min_length=8), AfterValidator(_fits_bcrypt)]
+Password = Annotated[str, Field(min_length=8), AfterValidator(_not_blank), AfterValidator(_fits_bcrypt)]
 OptionalText = Annotated[str | None, Field(default=None, max_length=200)]
 
 

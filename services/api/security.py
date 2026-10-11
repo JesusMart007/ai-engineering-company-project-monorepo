@@ -42,7 +42,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def _decode(token: str, expected_type: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"require_exp": True})
     except JWTError as error:
         raise InvalidToken(str(error)) from error
     if payload.get("type") != expected_type:

@@ -1,1 +1,29 @@
-{"name":"nexova-backoffice","private":true,"scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"eslint"},"dependencies":{"@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","next":"latest","react":"latest","react-dom":"latest","typescript":"latest"},"devDependencies":{"eslint":"^9.39.5","eslint-config-next":"^16.3.6"}}
+{
+  "name": "nexova-backoffice",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "jest --coverage"
+  },
+  "dependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.6",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
+    "ts-jest": "^29.4.14",
+    "ts-node": "^10.9.2"
+  }
+}

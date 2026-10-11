@@ -12,3 +12,5 @@ services/api/data/
 .env
 .env.*
 !.env.example
+uis/backoffice/coverage/
+services/api/.coverage

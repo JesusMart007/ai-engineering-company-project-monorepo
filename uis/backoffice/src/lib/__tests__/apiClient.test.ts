@@ -1,0 +1,124 @@
+/** @jest-environment node */
+import { apiFetch, apiJson, apiUrl } from "@/lib/apiClient";
+import * as auth from "@/lib/auth";
+import { ApiError } from "@/lib/errors";
+
+jest.mock("@/lib/auth", () => ({
+  getToken: jest.fn(),
+  clearToken: jest.fn(),
+  redirectToLogin: jest.fn(),
+}));
+
+const fetchMock = jest.fn();
+const getToken = auth.getToken as jest.Mock;
+
+function reply(status: number, body?: unknown): Response {
+  return new Response(body === undefined ? null : JSON.stringify(body), { status });
+}
+
+function lastRequest() {
+  const [url, init] = fetchMock.mock.calls.at(-1)!;
+  return { url: url as string, init: init as RequestInit, headers: init.headers as Headers };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  global.fetch = fetchMock;
+  getToken.mockReturnValue(null);
+});
+
+describe("apiUrl", () => {
+  it("routes API paths through the /api proxy without doubling the prefix", () => {
+    expect(apiUrl("/suppliers")).toBe("/api/suppliers");
+    expect(apiUrl("/api/incidents/analyze")).toBe("/api/incidents/analyze");
+  });
+});
+
+describe("apiFetch", () => {
+  it("adds the Bearer token to protected calls", async () => {
+    getToken.mockReturnValue("tok123");
+    fetchMock.mockResolvedValue(reply(200, {}));
+    await apiFetch("/auth/me");
+    expect(lastRequest().headers.get("Authorization")).toBe("Bearer tok123");
+  });
+
+  it("sends no Authorization header without a token or when auth is false", async () => {
+    fetchMock.mockResolvedValue(reply(200, {}));
+    await apiFetch("/auth/me");
+    expect(lastRequest().headers.has("Authorization")).toBe(false);
+    getToken.mockReturnValue("tok123");
+    await apiFetch("/auth/login", { auth: false });
+    expect(lastRequest().headers.has("Authorization")).toBe(false);
+  });
+
+  it("serialises `json` bodies with the JSON content type", async () => {
+    fetchMock.mockResolvedValue(reply(200, {}));
+    await apiFetch("/users", { method: "POST", json: { email: "a@b.com" } });
+    expect(lastRequest().init.body).toBe('{"email":"a@b.com"}');
+    expect(lastRequest().headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("on 401 clears the token, redirects to login and throws a session-expired error", async () => {
+    getToken.mockReturnValue("expired");
+    fetchMock.mockResolvedValue(reply(401, { detail: "Invalid or expired token" }));
+    await expect(apiFetch("/auth/me")).rejects.toMatchObject({ status: 401 });
+    expect(auth.clearToken).toHaveBeenCalledTimes(1);
+    expect(auth.redirectToLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not end the session on a 401 from an unauthenticated call (wrong password)", async () => {
+    fetchMock.mockResolvedValue(reply(401, { detail: "Incorrect email or password" }));
+    await expect(apiFetch("/auth/login", { auth: false })).rejects.toMatchObject({ status: 401 });
+    expect(auth.clearToken).not.toHaveBeenCalled();
+    expect(auth.redirectToLogin).not.toHaveBeenCalled();
+  });
+
+  it("turns a network failure into an ApiError of kind network", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(apiFetch("/suppliers")).rejects.toMatchObject({ status: 0, kind: "network" });
+  });
+
+  it("turns an abort by timeout into an ApiError of kind timeout", async () => {
+    fetchMock.mockRejectedValue(new DOMException("timed out", "TimeoutError"));
+    await expect(apiFetch("/suppliers")).rejects.toMatchObject({ kind: "timeout" });
+  });
+
+  it("maps FastAPI 422 issues to per-field Spanish messages and never shows server text", async () => {
+    fetchMock.mockResolvedValue(
+      reply(422, { detail: [{ loc: ["body", "password"], msg: "String should have at least 8 characters", type: "string_too_short", ctx: { min_length: 8 } }] }),
+    );
+    const error = await apiFetch("/users", { method: "POST", json: {}, labels: { password: "Contraseña" } }).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.fieldErrors).toEqual({ password: "Debe tener al menos 8 caracteres" });
+    expect(error.message).toBe("Contraseña: Debe tener al menos 8 caracteres");
+  });
+
+  it("replaces a non-validation error body with a message for the status", async () => {
+    fetchMock.mockResolvedValue(reply(500, { detail: "Traceback (most recent call last)" }));
+    const error = await apiFetch("/suppliers").catch((e) => e);
+    expect(error.status).toBe(500);
+    expect(error.message).not.toContain("Traceback");
+  });
+
+  it("tolerates a non-JSON error body", async () => {
+    fetchMock.mockResolvedValue(new Response("<html>Bad gateway</html>", { status: 502 }));
+    await expect(apiFetch("/suppliers")).rejects.toMatchObject({ status: 502 });
+  });
+});
+
+describe("apiJson", () => {
+  it("parses a JSON body", async () => {
+    fetchMock.mockResolvedValue(reply(200, { email: "a@b.com" }));
+    await expect(apiJson("/auth/me")).resolves.toEqual({ email: "a@b.com" });
+  });
+
+  it("returns undefined for 204 No Content", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(apiJson("/users/1", { method: "DELETE" })).resolves.toBeUndefined();
+  });
+
+  it("raises a parse ApiError when a 200 body is not JSON", async () => {
+    fetchMock.mockResolvedValue(new Response("oops", { status: 200 }));
+    await expect(apiJson("/auth/me")).rejects.toMatchObject({ kind: "parse" });
+  });
+});
