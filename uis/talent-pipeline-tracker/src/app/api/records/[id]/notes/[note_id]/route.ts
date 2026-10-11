@@ -16,11 +16,12 @@ export async function DELETE(request: Request, { params }: Params) {
     );
   }
 
-  if (candidate.notes) {
-    candidate.notes = candidate.notes.filter(
-      (n) => n.id !== note_id && n.note_id !== note_id
-    );
+  const notes = candidate.notes ?? [];
+  const remaining = notes.filter((n) => n.id !== note_id && n.note_id !== note_id);
+  if (remaining.length === notes.length) {
+    return NextResponse.json({ error: 'Nota no encontrada.' }, { status: 404 });
   }
+  candidate.notes = remaining;
 
   return new NextResponse(null, { status: 204 });
 }
