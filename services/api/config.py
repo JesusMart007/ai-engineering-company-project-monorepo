@@ -25,3 +25,10 @@ def _required(name: str) -> str:
 SECRET_KEY = _required("SECRET_KEY")
 ALGORITHM = _required("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(_required("ACCESS_TOKEN_EXPIRE_MINUTES"))
+
+# Password reset by email (Resend). Without RESEND_API_KEY the API still starts:
+# reset emails then fail and the error is logged (the response never reveals it).
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "").strip() or "onboarding@resend.dev"
+FRONTEND_URL = (os.environ.get("FRONTEND_URL", "").strip() or "http://localhost:3000").rstrip("/")
+RESET_TOKEN_EXPIRE_MINUTES = int(os.environ.get("RESET_TOKEN_EXPIRE_MINUTES", "").strip() or 30)
