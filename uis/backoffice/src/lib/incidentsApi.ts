@@ -1,6 +1,4 @@
-// Empty by default: requests go to the backoffice itself, which proxies them to
-// the API (see next.config.ts). Set NEXT_PUBLIC_API_URL to call the API directly.
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+import { apiFetch, apiJson } from "@/lib/apiClient";
 
 export type ProblemKind = "missing" | "invalid";
 
@@ -19,32 +17,18 @@ export type AnalysisResult = {
   labels: { rules: Record<string, string>; problems: Record<string, string>; scores: Record<string, string> };
 };
 
-async function errorMessage(response: Response, fallback: string): Promise<string> {
-  try {
-    const data = await response.json();
-    if (typeof data.detail === "string") return data.detail;
-  } catch {
-    /* non-JSON error body */
-  }
-  return `${fallback} (HTTP ${response.status})`;
-}
-
 export async function analyzeIncidents(file: File): Promise<AnalysisResult> {
   const body = new FormData();
   body.append("file", file);
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}/api/incidents/analyze`, { method: "POST", body });
-  } catch {
-    throw new Error("No se pudo conectar con la API de análisis. ¿Está arrancada?");
-  }
-  if (!response.ok) throw new Error(await errorMessage(response, "No se pudo analizar el archivo"));
-  return response.json();
+  return apiJson<AnalysisResult>("/api/incidents/analyze", {
+    method: "POST",
+    body,
+    fallback: "No se pudo analizar el archivo",
+  });
 }
 
 export async function downloadResultsCsv(): Promise<void> {
-  const response = await fetch(`${API_URL}/api/incidents/results/export`);
-  if (!response.ok) throw new Error(await errorMessage(response, "No se pudo descargar el CSV"));
+  const response = await apiFetch("/api/incidents/results/export", { fallback: "No se pudo descargar el CSV" });
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;

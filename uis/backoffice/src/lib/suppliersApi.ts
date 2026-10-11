@@ -1,8 +1,6 @@
-import { API_URL } from "@/lib/incidentsApi";
+import { apiJson, type ApiOptions } from "@/lib/apiClient";
 
-// Through the Next.js proxy the API lives under /api/suppliers (see next.config.ts),
-// so it never collides with the /suppliers page. Called directly, it is /suppliers.
-const SUPPLIERS_URL = API_URL ? `${API_URL}/suppliers` : "/api/suppliers";
+export { ApiError } from "@/lib/apiClient";
 
 export const COUNTRIES = ["Spain", "USA"] as const;
 export type Country = (typeof COUNTRIES)[number];
@@ -68,47 +66,8 @@ const FIELD_LABELS: Record<string, string> = {
   notes: "Notas",
 };
 
-/** Error raised for non-2xx responses; `messages` holds one readable line per problem. */
-export class ApiError extends Error {
-  constructor(public status: number, public messages: string[]) {
-    super(messages.join(" "));
-  }
-}
-
-type ValidationIssue = { loc?: (string | number)[]; msg?: string };
-
-function describeIssue(issue: ValidationIssue): string {
-  const message = (issue.msg ?? "Valor no válido").replace(/^Value error, /, "");
-  const field = (issue.loc ?? []).find((part) => typeof part === "string" && part !== "body");
-  return field ? `${FIELD_LABELS[field] ?? field}: ${message}` : message;
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${SUPPLIERS_URL}${path}`, {
-      ...init,
-      headers: init?.body ? { "Content-Type": "application/json" } : undefined,
-    });
-  } catch {
-    throw new ApiError(0, ["No se pudo conectar con la API de proveedores. ¿Está arrancada?"]);
-  }
-  if (response.ok) return (response.status === 204 ? undefined : await response.json()) as T;
-
-  // 502/503/504 come from the Next.js proxy when the FastAPI service is down.
-  let messages = [
-    response.status >= 502 && response.status <= 504
-      ? "No se pudo conectar con la API de proveedores. ¿Está arrancada en el puerto 8000?"
-      : `La API respondió con un error (HTTP ${response.status})`,
-  ];
-  try {
-    const { detail } = await response.json();
-    if (typeof detail === "string") messages = [detail];
-    else if (Array.isArray(detail)) messages = detail.map(describeIssue);
-  } catch {
-    /* non-JSON error body */
-  }
-  throw new ApiError(response.status, messages);
+function request<T>(path: string, options?: ApiOptions): Promise<T> {
+  return apiJson<T>(`/suppliers${path}`, { ...options, labels: FIELD_LABELS });
 }
 
 export function listSuppliers(filters: SupplierFilters = {}): Promise<Supplier[]> {
@@ -120,15 +79,15 @@ export function listSuppliers(filters: SupplierFilters = {}): Promise<Supplier[]
 }
 
 export function createSupplier(input: SupplierInput): Promise<Supplier> {
-  return request<Supplier>("", { method: "POST", body: JSON.stringify(input) });
+  return request<Supplier>("", { method: "POST", json: input });
 }
 
 export function updateSupplierRate(id: number, monthlyRate: number): Promise<Supplier> {
-  return request<Supplier>(`/${id}/rate`, { method: "PATCH", body: JSON.stringify({ monthly_rate: monthlyRate }) });
+  return request<Supplier>(`/${id}/rate`, { method: "PATCH", json: { monthly_rate: monthlyRate } });
 }
 
 export function updateSupplierStatus(id: number, status: SupplierStatus): Promise<Supplier> {
-  return request<Supplier>(`/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+  return request<Supplier>(`/${id}/status`, { method: "PATCH", json: { status } });
 }
 
 export function deleteSupplier(id: number): Promise<void> {

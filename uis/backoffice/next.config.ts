@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
       // The API serves suppliers at /suppliers; the /api prefix keeps the /suppliers page free.
       { source: "/api/suppliers", destination: `${API_INTERNAL_URL}/suppliers` },
       { source: "/api/suppliers/:path*", destination: `${API_INTERNAL_URL}/suppliers/:path*` },
+      // Same idea for accounts: /api keeps /login, /register and /account free for pages.
+      { source: "/api/auth/:path*", destination: `${API_INTERNAL_URL}/auth/:path*` },
+      { source: "/api/users", destination: `${API_INTERNAL_URL}/users` },
+      { source: "/api/users/:path*", destination: `${API_INTERNAL_URL}/users/:path*` },
+      { source: "/api/profiles/:path*", destination: `${API_INTERNAL_URL}/profiles/:path*` },
     ];
   },
 };
