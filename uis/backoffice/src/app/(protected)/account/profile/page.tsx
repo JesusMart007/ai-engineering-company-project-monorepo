@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { TextField } from "@/components/TextField";
 import { ApiError } from "@/lib/apiClient";
 import { getMe, updateProfile, type Me, type ProfileFields } from "@/lib/authApi";
-
-function messageOf(reason: unknown): string {
-  return reason instanceof ApiError ? reason.messages.join(" ") : "Error inesperado";
-}
+import { getUserMessage } from "@/lib/errors";
 
 export default function ProfilePage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -18,9 +15,20 @@ export default function ProfilePage() {
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    getMe().then(setMe, (reason) => setLoadError(messageOf(reason)));
+  const load = useCallback(async () => {
+    setLoadError("");
+    try {
+      setMe(await getMe());
+    } catch (reason) {
+      setLoadError(getUserMessage(reason));
+    }
   }, []);
+
+  useEffect(() => {
+    // Fetching on mount is the point of this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +46,7 @@ export default function ProfilePage() {
       setNotice("Perfil guardado.");
     } catch (reason) {
       if (reason instanceof ApiError && Object.keys(reason.fieldErrors).length) setFieldErrors(reason.fieldErrors);
-      else setError(messageOf(reason));
+      else setError(getUserMessage(reason));
     } finally {
       setSaving(false);
     }
@@ -47,8 +55,14 @@ export default function ProfilePage() {
   return (
     <main className="narrow">
       <h1>Mi perfil</h1>
-      {loadError && <p className="error" role="alert">{loadError}</p>}
-      {!me && !loadError && <p role="status">Cargando perfil…</p>}
+      {loadError && (
+        <div className="state" role="alert">
+          <p className="error">{loadError}</p>
+          <button type="button" onClick={load}>Reintentar</button>
+          <Link href="/">Volver al inicio</Link>
+        </div>
+      )}
+      {!me && !loadError && <p className="state muted" role="status"><span className="spinner" aria-hidden="true" />Cargando perfil…</p>}
       {me && (
         <form className="card form-stack" onSubmit={save}>
           <label>
