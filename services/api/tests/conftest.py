@@ -21,7 +21,7 @@ import security  # noqa: E402
 security.bcrypt = security.bcrypt.using(rounds=4)
 
 import main  # noqa: E402
-from database import DB_PATH_ENV, USERS_DB_PATH_ENV  # noqa: E402
+from database import DB_PATH_ENV, INCIDENTS_DB_PATH_ENV, USERS_DB_PATH_ENV  # noqa: E402
 
 PASSWORD = "correct-horse-1"
 
@@ -31,6 +31,7 @@ def anon_client(tmp_path, monkeypatch):
     """API backed by temporary TinyDB files, with no credentials."""
     monkeypatch.setenv(DB_PATH_ENV, str(tmp_path / "suppliers.json"))
     monkeypatch.setenv(USERS_DB_PATH_ENV, str(tmp_path / "users.json"))
+    monkeypatch.setenv(INCIDENTS_DB_PATH_ENV, str(tmp_path / "incidents.json"))
     with TestClient(main.app) as test_client:
         yield test_client
 

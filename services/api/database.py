@@ -1,4 +1,4 @@
-"""TinyDB data access for suppliers, users, profiles and password reset tokens.
+"""TinyDB data access for suppliers, incidents, users, profiles and password reset tokens.
 
 Routes only talk to SupplierRepository, so moving to Postgres later means
 rewriting this module without touching the API layer. Documents are stored as
@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import os
 import threading
+from collections import Counter
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 from tinydb import Query, TinyDB
 from tinydb.table import Document
 
+from incident_models import Incident, IncidentRecord, IncidentSummary
 from models import Category, Country, Supplier, SupplierCreate, SupplierStatus
+from nexova_shared.incidents import Branch, IncidentCategory, IncidentOrigin, IncidentStatus, can_transition
 from user_models import PasswordResetToken, Profile, User
 
 API_ROOT = Path(__file__).resolve().parent
@@ -23,6 +27,8 @@ DEFAULT_DB_PATH = API_ROOT / "data" / "suppliers.json"
 DB_PATH_ENV = "SUPPLIERS_DB_PATH"
 DEFAULT_USERS_DB_PATH = API_ROOT / "data" / "users.json"
 USERS_DB_PATH_ENV = "USERS_DB_PATH"
+DEFAULT_INCIDENTS_DB_PATH = API_ROOT / "data" / "incidents.json"
+INCIDENTS_DB_PATH_ENV = "INCIDENTS_DB_PATH"
 
 
 def db_path_from_env() -> Path:
@@ -31,6 +37,10 @@ def db_path_from_env() -> Path:
 
 def users_db_path_from_env() -> Path:
     return Path(os.environ.get(USERS_DB_PATH_ENV) or DEFAULT_USERS_DB_PATH)
+
+
+def incidents_db_path_from_env() -> Path:
+    return Path(os.environ.get(INCIDENTS_DB_PATH_ENV) or DEFAULT_INCIDENTS_DB_PATH)
 
 
 def _now() -> str:
@@ -109,6 +119,103 @@ class SupplierRepository:
                 return False
             self._table.remove(doc_ids=[supplier_id])
             return True
+
+
+class SourceIdAlreadyExists(Exception):
+    pass
+
+
+class InvalidStatusTransition(Exception):
+    def __init__(self, current: IncidentStatus, new: IncidentStatus) -> None:
+        super().__init__(f"{current} -> {new}")
+        self.current = current
+        self.new = new
+
+
+class IncidentRepository:
+    """Incidents in their own TinyDB file, keyed by doc_id.
+
+    `source_id` (the CSV ticket_id) is unique when set; the check and the insert
+    happen under one lock. Status changes are checked against the lifecycle
+    under the same lock, so two requests cannot both move an incident.
+    """
+
+    def __init__(self, path: Path | str) -> None:
+        self._db = TinyDB(path, create_dirs=True, encoding="utf-8", ensure_ascii=False, indent=2)
+        self._table = self._db.table("incidents")
+        self._lock = threading.Lock()
+
+    def close(self) -> None:
+        self._db.close()
+
+    @staticmethod
+    def _to_model(doc: Document) -> Incident:
+        return Incident.model_validate({**doc, "id": doc.doc_id})
+
+    def list(
+        self,
+        status: IncidentStatus | None = None,
+        origin: IncidentOrigin | None = None,
+        branch: Branch | None = None,
+        category: IncidentCategory | None = None,
+    ) -> list[Incident]:
+        """Incidents matching every given filter, newest first."""
+        filters = {"status": status, "origin": origin, "branch": branch, "category": category}
+        wanted = {field: value.value for field, value in filters.items() if value is not None}
+        with self._lock:
+            docs = self._table.all()
+        incidents = [self._to_model(doc) for doc in docs if all(doc.get(field) == value for field, value in wanted.items())]
+        return sorted(incidents, key=lambda incident: (incident.created_at, incident.id), reverse=True)
+
+    def get(self, incident_id: int) -> Incident | None:
+        with self._lock:
+            doc = self._table.get(doc_id=incident_id)
+        return self._to_model(doc) if doc else None
+
+    def exists_source(self, source_id: str) -> bool:
+        with self._lock:
+            return self._table.contains(Query().source_id == source_id)
+
+    def create(self, record: IncidentRecord) -> Incident:
+        """Insert a validated record. Raises SourceIdAlreadyExists for a repeated source_id."""
+        with self._lock:
+            if record.source_id is not None and self._table.contains(Query().source_id == record.source_id):
+                raise SourceIdAlreadyExists(record.source_id)
+            doc_id = self._table.insert(record.model_dump(mode="json"))
+            doc = self._table.get(doc_id=doc_id)
+        return self._to_model(doc)
+
+    def update_status(self, incident_id: int, status: IncidentStatus) -> Incident | None:
+        """Move the incident to `status` and touch updated_at. None if it does not exist.
+
+        Raises InvalidStatusTransition if the lifecycle does not allow the change.
+        """
+        with self._lock:
+            doc = self._table.get(doc_id=incident_id)
+            if doc is None:
+                return None
+            current = IncidentStatus(doc["status"])
+            if not can_transition(current, status):
+                raise InvalidStatusTransition(current, status)
+            self._table.update({"status": status.value, "updated_at": _now()}, doc_ids=[incident_id])
+            doc = self._table.get(doc_id=incident_id)
+        return self._to_model(doc)
+
+    def summary(self) -> IncidentSummary:
+        with self._lock:
+            docs = self._table.all()
+
+        def totals(field: str, values: type[StrEnum]) -> dict:
+            counts = Counter(doc.get(field) for doc in docs)
+            return {value: counts[value.value] for value in values}
+
+        return IncidentSummary(
+            total=len(docs),
+            by_status=totals("status", IncidentStatus),
+            by_category=totals("category", IncidentCategory),
+            by_origin=totals("origin", IncidentOrigin),
+            by_branch=totals("branch", Branch),
+        )
 
 
 class EmailAlreadyRegistered(Exception):

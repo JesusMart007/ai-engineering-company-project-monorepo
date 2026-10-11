@@ -31,7 +31,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 only-include = [
-    "main.py", "config.py", "models.py", "user_models.py", "database.py", "security.py",
+    "main.py", "config.py", "models.py", "incident_models.py", "user_models.py", "database.py", "security.py",
     "user_service.py", "email_service.py", "dependencies.py", "seed.py", "seed_data.py", "routes",
 ]
 
