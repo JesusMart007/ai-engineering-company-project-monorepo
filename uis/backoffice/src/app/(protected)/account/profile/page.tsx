@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { TextField } from "@/components/TextField";
 import { ApiError } from "@/lib/apiClient";
 import { getMe, updateProfile, type Me, type ProfileFields } from "@/lib/authApi";
@@ -70,6 +71,9 @@ export default function ProfilePage() {
           <button type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         </form>
       )}
+      <p>
+        <Link href="/account/change-password">Cambiar contraseña</Link>
+      </p>
     </main>
   );
 }

@@ -1,4 +1,4 @@
-"""TinyDB data access for suppliers, users and profiles.
+"""TinyDB data access for suppliers, users, profiles and password reset tokens.
 
 Routes only talk to SupplierRepository, so moving to Postgres later means
 rewriting this module without touching the API layer. Documents are stored as
@@ -16,7 +16,7 @@ from tinydb import Query, TinyDB
 from tinydb.table import Document
 
 from models import Category, Country, Supplier, SupplierCreate, SupplierStatus
-from user_models import Profile, User
+from user_models import PasswordResetToken, Profile, User
 
 API_ROOT = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = API_ROOT / "data" / "suppliers.json"
@@ -116,9 +116,9 @@ class EmailAlreadyRegistered(Exception):
 
 
 class UserRepository:
-    """Users and their 1:1 profiles, in two tables of the same TinyDB file.
+    """Users, their 1:1 profiles and password reset tokens, in tables of the same TinyDB file.
 
-    Both tables share one lock, so creating or deleting a user together with its
+    All tables share one lock, so creating or deleting a user together with its
     profile happens as a single step no other request can interleave with.
     Records are keyed by their own `id` (uuid4 string), not by TinyDB's doc_id.
     """
@@ -127,6 +127,7 @@ class UserRepository:
         self._db = TinyDB(path, create_dirs=True, encoding="utf-8", ensure_ascii=False, indent=2)
         self._users = self._db.table("users")
         self._profiles = self._db.table("profiles")
+        self._reset_tokens = self._db.table("password_reset_tokens")
         self._lock = threading.Lock()
 
     def close(self) -> None:
@@ -185,3 +186,40 @@ class UserRepository:
         with self._lock:
             self._profiles.upsert(profile.model_dump(mode="json"), Query().user_id == profile.user_id)
         return profile
+
+    def _invalidate_reset_tokens(self, user_id: str, now: str) -> int:
+        record = Query()
+        return len(self._reset_tokens.update({"used_at": now}, (record.user_id == user_id) & (record.used_at == None)))  # noqa: E711
+
+    def add_reset_token(self, token: PasswordResetToken) -> None:
+        """Store a new reset token, invalidating any the user still had pending."""
+        with self._lock:
+            self._invalidate_reset_tokens(token.user_id, _now())
+            self._reset_tokens.insert(token.model_dump(mode="json"))
+
+    def consume_reset_token(self, jti: str, user_id: str) -> bool:
+        """Mark the token used if it exists, belongs to the user, is unused and unexpired.
+
+        Check and update happen under one lock, so two requests can never spend the same token.
+        """
+        record = Query()
+        with self._lock:
+            doc = self._reset_tokens.get(record.jti == jti)
+            if doc is None:
+                return False
+            token = PasswordResetToken.model_validate(doc)
+            now = datetime.now(UTC)
+            if token.user_id != user_id or token.used_at is not None or token.expires_at <= now:
+                return False
+            self._reset_tokens.update({"used_at": now.isoformat()}, record.jti == jti)
+        return True
+
+    def invalidate_reset_tokens(self, user_id: str) -> int:
+        """Spend every pending reset token of the user. Returns how many there were."""
+        with self._lock:
+            return self._invalidate_reset_tokens(user_id, _now())
+
+    def get_reset_token(self, jti: str) -> PasswordResetToken | None:
+        with self._lock:
+            doc = self._reset_tokens.get(Query().jti == jti)
+        return PasswordResetToken.model_validate(doc) if doc else None

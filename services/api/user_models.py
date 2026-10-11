@@ -87,6 +87,37 @@ class Profile(ProfileFields):
     user_id: str
 
 
+class PasswordResetToken(BaseModel):
+    """Server-side state of a reset link, so each one works only once. Internal only."""
+
+    jti: str
+    user_id: str
+    expires_at: datetime
+    used_at: datetime | None = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str
+    new_password: Password
+
+
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str
+    new_password: Password
+
+
+class Message(BaseModel):
+    detail: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

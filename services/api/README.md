@@ -62,6 +62,10 @@ Los tests usan bases TinyDB temporales (`tmp_path`) vía `SUPPLIERS_DB_PATH` y `
 | `ALGORITHM`         | — (obligatoria, p. ej. `HS256`)               | Algoritmo de firma JWT.                                                      |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | — (obligatoria, p. ej. `30`)        | Validez del token de acceso.                                                 |
 | `CORS_ORIGINS`      | `http://localhost:3000,http://127.0.0.1:3000` | Orígenes permitidos (separados por comas), p. ej. la URL del backoffice.     |
+| `RESEND_API_KEY`    | — (vacía: los emails no se envían y se registra el error) | Clave de [Resend](https://resend.com/api-keys) para el email de restablecimiento. Solo en `.env`. |
+| `EMAIL_FROM`        | `onboarding@resend.dev`                       | Remitente. Con `onboarding@resend.dev`, Resend solo entrega al email de tu cuenta de Resend; para otros destinatarios hay que verificar un dominio. |
+| `FRONTEND_URL`      | `http://localhost:3000`                       | URL del backoffice; el enlace del email es `{FRONTEND_URL}/reset-password?token=…`. En Codespaces, la URL pública del puerto 3000. |
+| `RESET_TOKEN_EXPIRE_MINUTES` | `30`                                 | Validez del enlace de restablecimiento.                                      |
 
 ## Estructura
 
@@ -115,9 +119,20 @@ El cliente no puede enviar `id` ni `updated_at` (422).
 | `PUT /users/{id}` | Token | Solo el propio usuario o un admin (otro: 403). Cambia `email`/`password`; `role` solo un admin. |
 | `DELETE /users/{id}` | Token | Solo el propio usuario o un admin (otro: 403). Borra también el perfil. |
 | `GET /profiles/me`, `PUT /profiles/me` | Token | Perfil propio (`name`, `phone`, `address`). |
+| `POST /auth/forgot-password` | Pública | `{"email"}`. Siempre 200 con el mismo mensaje, exista o no el email. Si existe y está activo, envía el enlace de restablecimiento por email (en segundo plano). |
+| `POST /auth/reset-password` | Pública | `{"token", "new_password"}`. Enlace inválido, caducado o ya usado: 400. Contraseña con las reglas del registro (422). |
+| `POST /auth/change-password` | Token | `{"current_password", "new_password"}`. Contraseña actual incorrecta: 400. |
 | `/suppliers/...`, `/api/incidents/...` | Token | Todas las rutas. |
 
-Sin token, con token mal formado, expirado o de un usuario inexistente/inactivo: 401 con `WWW-Authenticate: Bearer`.
+Sin token, con token mal formado, expirado, de un usuario inexistente/inactivo o que no sea de sesión (`type` distinto de `"access"`): 401 con `WWW-Authenticate: Bearer`.
+
+### Recuperación y cambio de contraseña
+
+- **Tokens con tipo.** Los de sesión llevan `type: "access"` y los de restablecimiento `type: "password_reset"`; cada uno solo vale para lo suyo, así que un enlace de reset nunca sirve como token de sesión. Los tokens de sesión anteriores a este cambio (sin `type`) dejan de valer: basta con volver a iniciar sesión.
+- **Un solo uso.** El token de reset es un JWT con `sub`, `exp`, `jti` (uuid4) y `type`. Su estado vive en la tabla TinyDB `password_reset_tokens` (`jti`, `user_id`, `expires_at`, `used_at`) del mismo fichero que `users`. Al usarlo se marca `used_at` (comprobación y marca en un único paso).
+- **Invalidación.** Pedir un enlace nuevo invalida los pendientes del usuario, y cualquier cambio de contraseña (reset o change) también.
+- **Sin filtrar si el email existe.** `forgot-password` responde siempre igual y busca al usuario, crea el token y envía el email con `BackgroundTasks`, después de responder. Si Resend falla, solo se registra en los logs.
+- **Email** (`email_service.py`): HTML de una columna con estilos inline y botón grande, más versión en texto plano con la URL completa; indica cuándo caduca y que puede ignorarse si no se pidió.
 
 Roles: `admin`, `manager`, `user`. El registro público solo crea `user`; para tener el primer admin, edita su `role` en `data/users.json` (o desde otro admin con `PUT /users/{id}`).
 
@@ -185,7 +200,7 @@ El backoffice (`uis/backoffice`) llama a la API a través de un proxy de Next.js
 
 ### Sesión en el backoffice
 
-- `/login` y `/register` son públicas; el resto (`/`, `/incidents`, `/suppliers`, `/account/profile`) exige sesión.
+- `/login` y `/register` son públicas (con sesión redirigen a `/`); `/forgot-password` y `/reset-password` son públicas sin redirección (el enlace del email funciona aunque haya sesión); el resto (`/`, `/incidents`, `/suppliers`, `/account/profile`, `/account/change-password`) exige sesión.
 - Al iniciar sesión, el token de `POST /auth/login` se guarda en `localStorage` (`nexova.accessToken`) y cada llamada protegida lo envía como `Authorization: Bearer <token>` (`src/lib/apiClient.ts`).
 - La protección es en el cliente (`src/components/AuthGuard.tsx`): sin token, o con el `exp` vencido, redirige a `/login`. La firma la valida la API; cualquier 401 borra el token y lleva a `/login`.
 - "Cerrar sesión" (barra superior) borra el token. No hay cookies ni middleware de Next.js.
