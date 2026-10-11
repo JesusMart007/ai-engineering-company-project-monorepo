@@ -270,7 +270,7 @@ El backoffice (`uis/backoffice`) llama a la API a través de un proxy de Next.js
 
 ### Sesión en el backoffice
 
-- `/login` y `/register` son públicas (con sesión redirigen a `/`); `/forgot-password` y `/reset-password` son públicas sin redirección (el enlace del email funciona aunque haya sesión); el resto (`/`, `/incidents`, `/suppliers`, `/account/profile`, `/account/change-password`) exige sesión.
+- `/login` y `/register` son públicas (con sesión redirigen a `/`); `/forgot-password` y `/reset-password` son públicas sin redirección (el enlace del email funciona aunque haya sesión); el resto (`/`, `/incidents` —análisis CSV—, `/incidents/new`, `/incidents/list`, `/incidents/summary`, `/suppliers`, `/account/profile`, `/account/change-password`) exige sesión.
 - Al iniciar sesión, el token de `POST /auth/login` se guarda en `localStorage` (`nexova.accessToken`) y cada llamada protegida lo envía como `Authorization: Bearer <token>` (`src/lib/apiClient.ts`).
 - La protección es en el cliente (`src/components/AuthGuard.tsx`): sin token, o con el `exp` vencido, redirige a `/login`. La firma la valida la API; cualquier 401 borra el token y lleva a `/login`.
 - "Cerrar sesión" (barra superior) borra el token. No hay cookies ni middleware de Next.js.
