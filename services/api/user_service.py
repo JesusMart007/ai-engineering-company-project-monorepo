@@ -54,7 +54,10 @@ def update_user(repository: UserRepository, user_id: str, data: UserUpdate) -> U
         fields["role"] = data.role.value
     if not fields:
         return repository.get_user(user_id)
-    return repository.update_user(user_id, fields)
+    updated = repository.update_user(user_id, fields)
+    if updated is not None and data.password is not None:
+        repository.invalidate_reset_tokens(user_id)
+    return updated
 
 
 def delete_user(repository: UserRepository, user_id: str) -> bool:
