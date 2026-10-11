@@ -181,6 +181,19 @@ curl -o results.csv $API/api/incidents/results/export
 
 ## Backoffice
 
-> ⚠️ El backoffice aún no envía token, así que sus llamadas a `/suppliers` y `/api/incidents` reciben 401 hasta que se implemente el login en el frontend.
+El backoffice (`uis/backoffice`) llama a la API a través de un proxy de Next.js: cada ruta de la API vive bajo `/api` para no chocar con las páginas (`/api/suppliers` → `/suppliers`, `/api/incidents` → `/api/incidents`, `/api/auth` → `/auth`, `/api/users` → `/users`, `/api/profiles` → `/profiles`). La URL interna se configura con `API_INTERNAL_URL` (por defecto `http://127.0.0.1:8000`). Para llamar a la API directamente desde el navegador, define `NEXT_PUBLIC_API_URL` y añade ese origen del backoffice a `CORS_ORIGINS`.
 
-El backoffice (`uis/backoffice`) llama a la API a través de un proxy de Next.js (`/api/suppliers` → `/suppliers`, `/api/incidents` → `/api/incidents`). La URL interna se configura con `API_INTERNAL_URL` (por defecto `http://127.0.0.1:8000`). Para llamar a la API directamente desde el navegador, define `NEXT_PUBLIC_API_URL` y añade ese origen del backoffice a `CORS_ORIGINS`.
+### Sesión en el backoffice
+
+- `/login` y `/register` son públicas; el resto (`/`, `/incidents`, `/suppliers`, `/account/profile`) exige sesión.
+- Al iniciar sesión, el token de `POST /auth/login` se guarda en `localStorage` (`nexova.accessToken`) y cada llamada protegida lo envía como `Authorization: Bearer <token>` (`src/lib/apiClient.ts`).
+- La protección es en el cliente (`src/components/AuthGuard.tsx`): sin token, o con el `exp` vencido, redirige a `/login`. La firma la valida la API; cualquier 401 borra el token y lleva a `/login`.
+- "Cerrar sesión" (barra superior) borra el token. No hay cookies ni middleware de Next.js.
+
+```bash
+cd uis/backoffice
+npm install
+npm run dev     # http://localhost:3000 → /login; crea una cuenta en /register
+npm run lint
+npm run build
+```
