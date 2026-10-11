@@ -44,6 +44,8 @@ export async function register(input: RegisterInput): Promise<void> {
       const message = "Ya existe una cuenta con este email.";
       throw new ApiError(409, [message], { email: message });
     }
+    // email-validator explains the problem in English; one Spanish line is enough here.
+    if (reason instanceof ApiError && reason.fieldErrors.email) reason.fieldErrors.email = "Introduce un email válido.";
     throw reason;
   }
 }
