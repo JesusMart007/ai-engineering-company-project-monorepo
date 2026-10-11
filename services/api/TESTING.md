@@ -1,6 +1,6 @@
 # TESTING — AUTH-088: batería de pruebas de la API de autenticación
 
-> Estado: **PLAN (Fase 1). Todavía sin resultados.** Pendiente de aprobación.
+> Estado: **plan aprobado e implementado.** Resultados, bugs y cobertura en las secciones 7–11. Las secciones 0–6 conservan el plan original tal como se aprobó.
 
 ## 0. Punto de partida (reconocimiento)
 
@@ -202,3 +202,128 @@ Marcados así porque **no estaban en tu lista**:
 2. ¿`freezegun` para controlar el tiempo (recomendado)?
 3. ¿Qué sugeridos 🤖 (S1–S13) entran? Mi recomendación: todos menos S9 y S10.
 4. B1, B2, B3: ¿los corrijo con el cambio mínimo (`strip()`/validador anti-espacios, `require_exp`, `.strip()` en el login)? B4 lo dejo documentado salvo que me digas que lo cambie.
+
+---
+
+# RESULTADOS
+
+## 7. Cómo ejecutar cada suite
+
+**Backend** (desde `services/api/`, sin flags extra):
+
+```bash
+uv run pytest                      # 296 tests
+uv run pytest --cov=security --cov=dependencies --cov=user_service --cov=user_models \
+  --cov=database --cov=email_service --cov=routes.auth --cov=routes.users --cov=routes.profiles \
+  --cov-report=term-missing        # cobertura del módulo de autenticación
+```
+
+**Frontend** (independiente, desde `uis/backoffice/`):
+
+```bash
+npm test                           # jest --coverage (61 tests)
+```
+
+Los tests nunca tocan `data/`: cada test usa TinyDB en `tmp_path`; Resend está mockeado por un fixture `autouse` (`resend_mock`), así que no hace falta `RESEND_API_KEY`.
+
+## 8. Qué cubre cada módulo
+
+| Módulo | Qué prueba |
+|---|---|
+| `tests/test_register.py` (nuevo) | `create_user`: role por defecto, hash bcrypt verificable, profile con/sin opcionales, duplicados (mayúsculas/espacios), reglas de contraseña (vacía, blanca, 72 bytes), email inválido, role en el alta, decisión de `POST /users`. |
+| `tests/test_login.py` (nuevo) | `authenticate`: correcta, incorrecta, inexistente (mismo resultado, con chequeo de hash ficticio), inactivo, vacía/larga, mayúsculas y espacios; claims `sub`/`exp`; 401 genérico idéntico por HTTP. |
+| `tests/test_token.py` (nuevo) | Creación/decodificación de tokens (exp exacto con tiempo congelado, frontera de caducidad), clave/algoritmo erróneos, `alg: none`, sin `sub`/`type`/`exp`, tokens de reset vs. sesión, hashing, y `get_current_user` llamado directamente. |
+| `tests/test_auth_me.py` (nuevo) | Identidad sacada del token, perfil ausente, role leído de la BD, rutas protegidas. |
+| `tests/test_change_password.py` (nuevo) | Contraseña actual correcta/incorrecta/vacía, nueva inválida, invalidación de enlaces de reset, igual a la actual, sesión previa sigue válida (límite documentado). |
+| `tests/test_users.py` (ampliado) | Servicio: `update_user`, duplicados, `delete_user` con perfil; permisos: 403 antes que 404 para no-admin, manager sin poderes, admin se borra a sí mismo (documentado). |
+| `tests/test_profiles.py` (ampliado) | `update_profile` parcial, `null` explícito, perfil ausente, aislamiento entre usuarios, límite de 200. |
+| `tests/test_password_reset.py` (ampliado) | `request_password_reset` / `reset_password` sin HTTP: token y email, usuario desconocido, fallo de Resend, sin API key, un solo uso, expirado, tipo de token, usuario borrado/inactivo, dueño del `jti`. |
+| Tests preexistentes | `test_auth.py`, `test_api.py`, `test_errors.py`, `test_robustness.py`, `test_seed_cli.py`, etc. se mantienen sin cambios. |
+| `uis/backoffice/src/lib/__tests__/auth.test.ts` | `getToken/setToken/clearToken` (incluido almacenamiento bloqueado), suscripción, `isTokenValid` (exp pasado, malformado, sin exp), `redirectToLogin`, `logout`. |
+| `.../apiClient.test.ts` | Bearer, 401 → limpia token y redirige (y no en llamadas sin auth), red/timeout, mensajes 422 por campo, cuerpos no JSON, `apiJson`. |
+| `.../authApi.test.ts`, `.../errors.test.ts` | Traducción de 401/409/400 en login, registro, reset y cambio; `getUserMessage(s)`, `statusMessage`, `isTransient` (FE-019). |
+
+## 9. Cobertura
+
+**Backend — módulos de autenticación** (`uv run pytest --cov=…`): objetivo ≥ 70 %.
+
+```
+Name                 Stmts   Miss  Cover   Missing
+--------------------------------------------------
+database.py            237      9    96%   62-64, 198-199, 205, 287-289
+dependencies.py         26      0   100%
+email_service.py        33      3    91%   40-42
+routes/auth.py          46      0   100%
+routes/profiles.py      16      0   100%
+routes/users.py         46      0   100%
+security.py             53      0   100%
+user_models.py          72      0   100%
+user_service.py         76      0   100%
+--------------------------------------------------
+TOTAL                  605     12    98%
+```
+
+Lo no cubierto son rutas de error de `open_db` (archivo corrupto, cubierto por `test_robustness.py` solo en parte de ramas), `SupplierRepository`/incidentes dentro de `database.py` y la rama "sin API key" de `email_service._send` en el arranque.
+
+**API-042 — incidencias y proveedores** (suite preexistente, ya con los tres niveles: validación, transiciones válidas/inválidas, resumen con BD vacía, filtros): `routes/incident_manager` 100 %, `routes/suppliers` 100 %, `incident_errors` 95 %, `models`/`incident_models` 100 % → **99 %** (≥ 60 %). No hizo falta añadir tests.
+
+**Frontend** (`npm test`):
+
+```
+--------------|---------|----------|---------|---------|-----------------------
+File          | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+--------------|---------|----------|---------|---------|-----------------------
+All files     |   86.25 |    78.06 |   88.23 |    87.7 |
+ apiClient.ts |   75.32 |    66.21 |    90.9 |   76.92 | 28,32-51,78-80
+ auth.ts      |   97.95 |    94.11 |     100 |     100 | 18
+ authApi.ts   |   80.95 |    70.83 |   57.14 |    82.5 | 54-55,60,64,74,91,109
+ errors.ts    |   97.67 |     97.5 |     100 |     100 | 36
+--------------|---------|----------|---------|---------|-----------------------
+Tests: 61 passed
+```
+
+Nota de entorno: `window.location` no es mockeable en jsdom 26 (Jest 30). Por eso `redirectToLogin`/`logout` se verifican porque jsdom informa "Not implemented: navigation" (intento de navegar a `/login`), y `apiClient` se prueba con `@/lib/auth` mockeado y entorno `node` (para tener `Response`).
+
+## 10. Sección de IA: casos sugeridos
+
+Casos que propuse y no estaban en la petición original; el resultado de tu revisión fue «todos menos S9 y S10».
+
+| ID | Caso | Decisión | Resultado |
+|---|---|---|---|
+| S1 | Token firmado sin `exp` | Aceptado | Detectó el bug B2 (corregido). |
+| S2 | Email con espacios en login / forgot | Aceptado | Detectó el bug B3 (corregido). |
+| S3 | Contraseña blanca en PUT/reset/change | Aceptado | Detectó el bug B1 (corregido). |
+| S4 | `PUT /users` con contraseña y enlaces de reset pendientes | Aceptado | Detectó un fallo nuevo, B10 (corregido). |
+| S5 | Contraseña rechazada en reset no gasta el token | Aceptado | Pasa (la validación ocurre antes del servicio). |
+| S6 | `consume_reset_token`: dueño y un solo uso | Aceptado | Pasa. |
+| S7 | Admin que se borra a sí mismo | Aceptado | Comportamiento documentado en un test (no se corrige). |
+| S8 | Reenviar el propio email en otra capitalización no es duplicado | Aceptado | Pasa. |
+| S9 | `ALGORITHM=none` en configuración | **Descartado** | Es un error de configuración, no lógica de la API. Queda como riesgo B8. |
+| S10 | Otras rutas protegidas rechazan token de reset | **Descartado** como test nuevo | Ya cubierto por `test_reset_token_cannot_be_used_as_a_session_token` (`/auth/me`, `/suppliers`, `/profiles/me`). |
+| S11 | Token de acceso sigue vigente tras cambiar contraseña | Aceptado | Documentado en un test (límite de diseño B5). |
+| S12 | El role se lee de la BD, no del token | Aceptado | Pasa. |
+| S13 | Nueva contraseña igual a la actual | Aceptado | Pasa (se permite). |
+
+## 11. Bugs encontrados y corregidos
+
+Cada uno: un commit `test:` que lo detecta (fallando) y un commit `fix:` posterior con el cambio mínimo.
+
+| ID | Qué fallaba | Test que lo detectó | Corrección |
+|---|---|---|---|
+| B2 | Un JWT bien firmado **sin `exp`** se aceptaba y nunca caducaba (`jose` no exige `exp`). | `test_token.py::test_token_without_expiry_is_rejected` | `security._decode`: `options={"require_exp": True}`. |
+| B1 | Una contraseña de solo espacios (≥ 8) se aceptaba en registro, reset, change y PUT. | `test_register.py::test_empty_short_or_blank_passwords_are_rejected` | `user_models.py`: validador `_not_blank` en el tipo `Password`. |
+| B3 | El registro recorta los espacios del email pero el login y forgot-password no: quien pegaba su email con un espacio no podía entrar. | `test_login.py::test_authenticate_ignores_surrounding_spaces_in_the_email` | `user_service.get_user_by_email`: `email.strip().lower()`. |
+| B10 | Cambiar la contraseña con `PUT /users/{id}` dejaba válidos los enlaces de reset pendientes (change/reset sí los invalidaban). | `test_users.py::test_changing_the_password_through_update_spends_pending_reset_links` | `user_service.update_user`: invalida los tokens de reset al cambiar la contraseña. |
+
+**Riesgos que se dejan documentados, sin cambiar el contrato:**
+- **B4:** `PUT /users/{id}` permite cambiar la contraseña sin la actual. Corregirlo cambiaría el contrato; pendiente de decisión.
+- **B5:** los JWT de acceso siguen vigentes tras cambiar la contraseña (diseño stateless; test que lo documenta).
+- **B6:** un admin puede borrarse y no hay camino para crear el primer admin salvo editando la BD (test que lo documenta).
+- **B7, B8, B9:** sin cambios (baja gravedad / configuración).
+
+## 12. Verificación final
+
+- `uv run pytest`: **296 passed**.
+- Cobertura del módulo de auth: **98 %** (≥ 70 %).
+- `npm test` (Jest): **61 passed**, sin errores; `tsc --noEmit` y `eslint` limpios.
+- `next build` del backoffice compila correctamente.
