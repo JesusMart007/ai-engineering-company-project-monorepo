@@ -134,3 +134,94 @@ def test_delete_removes_the_profile_too(anon_client, tmp_path):
     assert anon_client.delete(f"/users/{user['id']}", headers=headers).status_code == 204
     data = json.loads((tmp_path / "users.json").read_text(encoding="utf-8"))
     assert data["users"] == {} and data["profiles"] == {}
+
+
+# --- service level: user_service / repository decisions -----------------------------------------
+
+import user_service  # noqa: E402
+from database import EmailAlreadyRegistered  # noqa: E402
+from user_models import Role, UserUpdate  # noqa: E402
+
+
+def test_update_user_with_no_fields_changes_nothing(repo, user):
+    assert user_service.update_user(repo, user.id, UserUpdate()) == repo.get_user(user.id)
+
+
+def test_update_user_hashes_a_new_password(repo, user):
+    user_service.update_user(repo, user.id, UserUpdate(password="new-password-1"))
+    stored = repo.get_user(user.id)
+    assert stored.hashed_password != "new-password-1"
+    assert verify_password("new-password-1", stored.hashed_password)
+
+
+def test_update_user_to_an_email_taken_by_another_raises(repo, user, make_user):
+    other = make_user("other@nexova.example")
+    with pytest.raises(EmailAlreadyRegistered):
+        user_service.update_user(repo, user.id, UserUpdate(email=other.email))
+    assert repo.get_user(user.id).email == user.email
+
+
+def test_update_user_may_resubmit_its_own_email_in_other_case(repo, user):
+    updated = user_service.update_user(repo, user.id, UserUpdate(email=user.email.upper()))
+    assert updated.email == user.email
+
+
+def test_update_unknown_user_returns_none(repo):
+    assert user_service.update_user(repo, "missing", UserUpdate(role=Role.ADMIN)) is None
+
+
+def test_changing_the_password_through_update_spends_pending_reset_links(repo, user):
+    from user_models import PasswordResetToken  # noqa: PLC0415
+
+    repo.add_reset_token(PasswordResetToken(jti="pending", user_id=user.id, expires_at=datetime(2999, 1, 1, tzinfo=UTC)))
+    user_service.update_user(repo, user.id, UserUpdate(password="new-password-1"))
+    assert repo.get_reset_token("pending").used_at is not None
+
+
+def test_delete_user_removes_user_and_profile_and_reports_missing_ids(repo, make_user):
+    user = make_user("ana@nexova.example", name="Ana")
+    assert user_service.delete_user(repo, user.id) is True
+    assert repo.get_user(user.id) is None and repo.get_profile(user.id) is None
+    assert user_service.delete_user(repo, user.id) is False
+
+
+def test_delete_user_leaves_other_users_and_profiles_alone(repo, make_user):
+    ana, bob = make_user("ana@nexova.example", name="Ana"), make_user("bob@nexova.example", name="Bob")
+    user_service.delete_user(repo, ana.id)
+    assert repo.get_user(bob.id) is not None and repo.get_profile(bob.id).name == "Bob"
+
+
+def test_non_admin_gets_403_not_404_for_someone_elses_missing_id(anon_client):
+    register(anon_client, "ana@nexova.example")
+    headers = login(anon_client, "ana@nexova.example")
+    # 403 before any lookup: a non-admin cannot probe which ids exist.
+    assert anon_client.delete("/users/does-not-exist", headers=headers).status_code == 403
+
+
+def test_admin_gets_404_for_a_missing_id(anon_client):
+    admin = register(anon_client, "admin@nexova.example")
+    _make_admin(anon_client, admin["id"])
+    headers = login(anon_client, "admin@nexova.example")
+    assert anon_client.put("/users/does-not-exist", json={"role": "user"}, headers=headers).status_code == 404
+
+
+def test_manager_has_no_admin_powers(anon_client):
+    manager, bob = register(anon_client, "mgr@nexova.example"), register(anon_client, "bob@nexova.example")
+    anon_client.app.state.user_repository.update_user(manager["id"], {"role": "manager"})
+    headers = login(anon_client, "mgr@nexova.example")
+    assert anon_client.put(f"/users/{bob['id']}", json={"role": "admin"}, headers=headers).status_code == 403
+    assert anon_client.delete(f"/users/{bob['id']}", headers=headers).status_code == 403
+
+
+def test_admin_can_delete_themselves(anon_client):
+    # Documented design limit: nothing prevents the last admin from removing the account.
+    admin = register(anon_client, "admin@nexova.example")
+    _make_admin(anon_client, admin["id"])
+    headers = login(anon_client, "admin@nexova.example")
+    assert anon_client.delete(f"/users/{admin['id']}", headers=headers).status_code == 204
+
+
+def test_empty_update_body_is_a_no_op(anon_client):
+    user = register(anon_client, "ana@nexova.example")
+    headers = login(anon_client, "ana@nexova.example")
+    assert anon_client.put(f"/users/{user['id']}", json={}, headers=headers).json() == user

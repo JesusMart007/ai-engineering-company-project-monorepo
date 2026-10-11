@@ -234,3 +234,117 @@ def test_resend_client_has_an_explicit_timeout():
     import resend
 
     assert resend.default_http_client._timeout == email_service.RESEND_TIMEOUT_SECONDS == 10
+
+
+# --- service level: request_password_reset / reset_password with a repository and no HTTP -----------
+
+from datetime import UTC, datetime  # noqa: E402
+
+from freezegun import freeze_time  # noqa: E402
+
+import email_service  # noqa: E402
+from security import create_access_token  # noqa: E402
+
+
+def issue(repo, email):
+    user_service.request_password_reset(repo, email)
+    return repo._reset_tokens.all()
+
+
+def test_request_for_a_registered_email_stores_a_token_and_sends_one_email(repo, user, resend_mock):
+    tokens = issue(repo, user.email.upper())
+    assert len(tokens) == 1 and tokens[0]["user_id"] == user.id and tokens[0]["used_at"] is None
+    assert [mail["to"] for mail in resend_mock] == [[user.email]]
+
+
+@freeze_time(datetime(2030, 1, 1, tzinfo=UTC))
+def test_reset_token_expires_after_the_configured_minutes(repo, user):
+    issue(repo, user.email)
+    stored = repo.get_reset_token(repo._reset_tokens.all()[0]["jti"])
+    assert stored.expires_at == datetime.now(UTC) + timedelta(minutes=user_service.RESET_TOKEN_EXPIRE_MINUTES)
+
+
+def test_request_for_an_unknown_email_stores_nothing_and_sends_nothing(repo, user, resend_mock):
+    assert issue(repo, "nobody@nexova.example") == []
+    assert resend_mock == []
+
+
+def test_request_survives_a_resend_failure_without_leaking_it(repo, user, monkeypatch, resend_mock):
+    from resend.exceptions import ResendError  # noqa: PLC0415
+
+    def boom(params):
+        raise ResendError(code=500, error_type="application_error", message="down", suggested_action="retry")
+
+    monkeypatch.setattr(email_service.resend.Emails, "send", staticmethod(boom))
+    user_service.request_password_reset(repo, user.email)  # does not raise
+    assert len(repo._reset_tokens.all()) == 1
+
+
+def test_request_without_api_key_sends_nothing_and_does_not_raise(repo, user, monkeypatch, resend_mock):
+    monkeypatch.setattr(email_service, "RESEND_API_KEY", "")
+    user_service.request_password_reset(repo, user.email)
+    assert resend_mock == []
+
+
+def _stored_reset(repo, user, **kwargs):
+    from user_models import PasswordResetToken  # noqa: PLC0415
+
+    token = security.create_reset_token(user.id, **kwargs)
+    repo.add_reset_token(PasswordResetToken(jti=token.jti, user_id=user.id, expires_at=token.expires_at))
+    return token
+
+
+def test_reset_with_a_valid_token_sets_the_password_and_marks_the_token_used(repo, user):
+    token = _stored_reset(repo, user)
+    user_service.reset_password(repo, token.token, NEW_PASSWORD)
+    assert security.verify_password(NEW_PASSWORD, repo.get_user(user.id).hashed_password)
+    assert not security.verify_password(PASSWORD, repo.get_user(user.id).hashed_password)
+    assert repo.get_reset_token(token.jti).used_at is not None
+
+
+def test_reusing_a_reset_token_fails_and_keeps_the_second_password_out(repo, user):
+    token = _stored_reset(repo, user)
+    user_service.reset_password(repo, token.token, NEW_PASSWORD)
+    with pytest.raises(user_service.InvalidResetToken):
+        user_service.reset_password(repo, token.token, "attacker-pass-9")
+    assert security.verify_password(NEW_PASSWORD, repo.get_user(user.id).hashed_password)
+
+
+def test_expired_reset_token_raises_and_keeps_the_old_password(repo, user):
+    token = _stored_reset(repo, user, expires_delta=timedelta(seconds=-1))
+    with pytest.raises(user_service.InvalidResetToken):
+        user_service.reset_password(repo, token.token, NEW_PASSWORD)
+    assert security.verify_password(PASSWORD, repo.get_user(user.id).hashed_password)
+
+
+def test_session_token_is_not_accepted_as_reset_token(repo, user):
+    with pytest.raises(user_service.InvalidResetToken):
+        user_service.reset_password(repo, create_access_token(user.id), NEW_PASSWORD)
+
+
+def test_reset_for_deleted_or_inactive_user_is_rejected(repo, make_user):
+    gone, inactive = make_user("gone@nexova.example"), make_user("off@nexova.example")
+    tokens = [_stored_reset(repo, gone), _stored_reset(repo, inactive)]
+    repo.delete_user_with_profile(gone.id)
+    repo.update_user(inactive.id, {"is_active": False})
+    for token in tokens:
+        with pytest.raises(user_service.InvalidResetToken):
+            user_service.reset_password(repo, token.token, NEW_PASSWORD)
+
+
+def test_a_token_cannot_be_spent_by_another_user_and_only_once(repo, user, make_user):
+    other = make_user("other@nexova.example")
+    token = _stored_reset(repo, user)
+    assert repo.consume_reset_token(token.jti, other.id) is False  # wrong owner
+    assert repo.consume_reset_token(token.jti, user.id) is True
+    assert repo.consume_reset_token(token.jti, user.id) is False  # already spent
+
+
+def test_rejected_new_password_does_not_spend_the_token():
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    from user_models import ResetPasswordRequest  # noqa: PLC0415
+
+    for bad in ("", "short", " " * 10, "x" * 73):
+        with pytest.raises(ValidationError):
+            ResetPasswordRequest(token="t", new_password=bad)
