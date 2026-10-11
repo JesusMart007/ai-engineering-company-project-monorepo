@@ -10,3 +10,4 @@ python-dotenv>=1.2.4
 resend>=2.49.1
 pytest>=8.0
 httpx>=0.27
+-e ../../packages/shared

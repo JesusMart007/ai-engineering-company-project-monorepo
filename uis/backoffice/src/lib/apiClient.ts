@@ -18,12 +18,15 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public messages: string[],
-    /** Validation messages keyed by field name, from FastAPI's 422 `detail[].loc`. */
+    /** Validation messages keyed by field name, from FastAPI's 422 `detail[].loc` or the incident manager's 400 `errors[].field`. */
     public fieldErrors: Record<string, string> = {},
   ) {
     super(messages.join(" "));
   }
 }
+
+/** Incident manager routes answer 400 `{ detail, errors: [{ field, message }] }`, already in plain Spanish. */
+type FieldError = { field: string; message: string };
 
 type ValidationIssue = { loc?: (string | number)[]; msg?: string; type?: string; ctx?: Record<string, unknown> };
 
@@ -55,8 +58,13 @@ async function toApiError(response: Response, fallback: string, labels: Record<s
   ];
   const fieldErrors: Record<string, string> = {};
   try {
-    const { detail } = await response.json();
-    if (typeof detail === "string") messages = [detail];
+    const { detail, errors } = await response.json();
+    if (Array.isArray(errors)) {
+      messages = errors.map(({ field, message }: FieldError) => {
+        fieldErrors[field] ??= message;
+        return message;
+      });
+    } else if (typeof detail === "string") messages = [detail];
     else if (Array.isArray(detail)) {
       messages = detail.map((issue: ValidationIssue) => {
         const field = issueField(issue);

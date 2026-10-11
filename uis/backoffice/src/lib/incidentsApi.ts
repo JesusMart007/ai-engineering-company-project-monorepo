@@ -1,4 +1,6 @@
-import { apiFetch, apiJson } from "@/lib/apiClient";
+import { apiFetch, apiJson, type ApiOptions } from "@/lib/apiClient";
+
+export { ApiError } from "@/lib/apiClient";
 
 export type ProblemKind = "missing" | "invalid";
 
@@ -35,4 +37,152 @@ export async function downloadResultsCsv(): Promise<void> {
   link.download = "results.csv";
   link.click();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Incident manager (/api/incidents). Values mirror nexova_shared.incidents
+// (packages/shared), the API's single source of truth; visible labels come from
+// CONTEXT-nexova-incident-manager.es.md. Allowed status changes are not copied
+// here: every incident carries its `next_statuses` from the API.
+// ---------------------------------------------------------------------------
+
+export const INCIDENT_STATUSES = ["open", "in_progress", "resolved", "discarded"] as const;
+export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
+
+export const INCIDENT_CATEGORIES = [
+  "technical_failure",
+  "process_error",
+  "client_complaint",
+  "candidate_issue",
+  "staff_issue",
+  "sla_breach",
+  "data_quality",
+  "other",
+] as const;
+export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[number];
+
+export const INCIDENT_ORIGINS = ["customer", "branch", "internal"] as const;
+export type IncidentOrigin = (typeof INCIDENT_ORIGINS)[number];
+
+export const BRANCHES = ["central", "valencia_operations", "miami_office", "remote"] as const;
+export type Branch = (typeof BRANCHES)[number];
+
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  open: "Abierta",
+  in_progress: "En curso",
+  resolved: "Resuelta",
+  discarded: "Descartada",
+};
+
+export const INCIDENT_STATUS_DESCRIPTIONS: Record<IncidentStatus, string> = {
+  open: "Incidencia registrada, sin responsable asignado aún",
+  in_progress: "Asignada a un equipo o persona, en gestión activa",
+  resolved: "Resuelta y confirmada por quien la reportó o por el responsable",
+  discarded: "Registrada por error, duplicada o fuera de alcance",
+};
+
+/** Action shown on a row to move an incident to that status. */
+export const STATUS_ACTION_LABELS: Record<IncidentStatus, string> = {
+  open: "Reabrir",
+  in_progress: "Pasar a en curso",
+  resolved: "Marcar como resuelta",
+  discarded: "Descartar",
+};
+
+export const INCIDENT_CATEGORY_LABELS: Record<IncidentCategory, string> = {
+  technical_failure: "Fallo técnico",
+  process_error: "Error de proceso",
+  client_complaint: "Queja de cliente",
+  candidate_issue: "Incidencia con candidato",
+  staff_issue: "Incidencia de personal (RR. HH.)",
+  sla_breach: "Incumplimiento de SLA",
+  data_quality: "Calidad de datos",
+  other: "Otra",
+};
+
+export const INCIDENT_CATEGORY_DESCRIPTIONS: Record<IncidentCategory, string> = {
+  technical_failure: "Fallo de sistema o herramienta tecnológica (ATS, HubSpot, Zendesk, infraestructura)",
+  process_error: "Error en un proceso operativo: selección, incorporación, formación, facturación",
+  client_complaint: "Queja o reclamación de un cliente corporativo sobre el servicio prestado",
+  candidate_issue: "Problema reportado por o relacionado con un candidato en proceso de selección",
+  staff_issue: "Incidencia interna de RRHH: ausencia, conflicto, accidente, baja",
+  sla_breach: "Incumplimiento de SLA comprometido con un cliente",
+  data_quality: "Error o inconsistencia en datos de candidatos, clientes o reportes",
+  other: "Cualquier incidencia que no encaje en las categorías anteriores",
+};
+
+export const INCIDENT_ORIGIN_LABELS: Record<IncidentOrigin, string> = {
+  customer: "Cliente corporativo",
+  branch: "Oficina de Nexova",
+  internal: "Detección interna",
+};
+
+export const INCIDENT_ORIGIN_DESCRIPTIONS: Record<IncidentOrigin, string> = {
+  customer: "Reportada por un cliente corporativo (empresa que contrata servicios de Nexova)",
+  branch: "Reportada por personal de una de las oficinas de Nexova",
+  internal: "Detectada internamente por tecnología, operaciones o dirección",
+};
+
+export const BRANCH_LABELS: Record<Branch, string> = {
+  central: "Central — Sede Valencia",
+  valencia_operations: "Valencia — Operaciones",
+  miami_office: "Miami Office",
+  remote: "Remoto (empleado sin sede fija)",
+};
+
+export type IncidentInput = {
+  title: string;
+  description: string;
+  category: IncidentCategory;
+  origin: IncidentOrigin;
+  branch: Branch;
+};
+
+export type Incident = IncidentInput & {
+  id: number;
+  status: IncidentStatus;
+  source_id: string | null;
+  created_at: string;
+  updated_at: string;
+  next_statuses: IncidentStatus[];
+};
+
+export type IncidentFilters = { status?: IncidentStatus | ""; origin?: IncidentOrigin | ""; branch?: Branch | "" };
+
+export type IncidentTotals = {
+  total: number;
+  by_status: Record<IncidentStatus, number>;
+  by_category: Record<IncidentCategory, number>;
+  by_origin: Record<IncidentOrigin, number>;
+  by_branch: Record<Branch, number>;
+};
+
+/** Requests that take longer than this fail like a dropped connection (ApiError with status 0). */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+function incidentRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  return apiJson<T>(`/api/incidents${path}`, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+}
+
+export function createIncident(input: IncidentInput): Promise<Incident> {
+  return incidentRequest<Incident>("", { method: "POST", json: input });
+}
+
+export function listIncidents(filters: IncidentFilters = {}): Promise<Incident[]> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+  const query = params.toString();
+  return incidentRequest<Incident[]>(query ? `?${query}` : "");
+}
+
+export function getIncidentTotals(): Promise<IncidentTotals> {
+  return incidentRequest<IncidentTotals>("/summary");
+}
+
+export function updateIncidentStatus(id: number, status: IncidentStatus): Promise<Incident> {
+  return incidentRequest<Incident>(`/${id}/status`, { method: "PATCH", json: { status } });
+}
+
+export function formatIncidentDate(iso: string): string {
+  return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
 }

@@ -1,24 +1,18 @@
 """Incident analysis endpoints.
 
-Validation and metrics come from scripts/incident_analysis.py, the same module
-the CLI (scripts/analyze.py) uses, so both always produce identical results.
+Validation and metrics come from nexova_shared.csv_validation (packages/shared),
+the same module the CLI (scripts/analyze.py) uses, so both always produce identical results.
 """
 
 from __future__ import annotations
 
 import io
-import sys
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-ROOT = Path(__file__).resolve().parents[3]
-SCRIPTS = ROOT / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-from incident_analysis import (  # noqa: E402
+from dependencies import get_current_user
+from nexova_shared.csv_validation import (
     PROBLEM_LABELS,
     RULE_LABELS,
     SCORE_LABELS,
@@ -28,7 +22,6 @@ from incident_analysis import (  # noqa: E402
     analyze_csv_text,
     write_results_csv,
 )
-from dependencies import get_current_user  # noqa: E402
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 CSV_CONTENT_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain", "application/octet-stream"}

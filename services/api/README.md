@@ -3,7 +3,8 @@
 Backend FastAPI centralizado de Nexova. Expone estos dominios:
 
 - **Directorio de proveedores** (`/suppliers`): registro oficial de proveedores, persistido en TinyDB. Especificación en [`09-lightweight-storage/CONTEXT-nexova.md`](../../09-lightweight-storage/CONTEXT-nexova.md).
-- **Análisis de incidencias** (`/api/incidents/...`): procesa el CSV del helpdesk con la misma lógica que `scripts/analyze.py`.
+- **Análisis de incidencias** (`/api/incidents/analyze`, `/api/incidents/results/export`): procesa el CSV del helpdesk con la misma lógica que `scripts/analyze.py`.
+- **Gestor de incidencias** (`/api/incidents`, `/api/incidents/{id}`, `/api/incidents/summary`): registro centralizado de incidencias en TinyDB. Especificación en [`CONTEXT-nexova-incident-manager.es.md`](../../CONTEXT-nexova-incident-manager.es.md).
 - **Usuarios, perfiles y autenticación** (`/users`, `/profiles`, `/auth`): cuentas en TinyDB y JWT stateless (sin sesiones ni cookies). Todas las rutas de proveedores e incidencias exigen token.
 
 ## Instalación
@@ -35,6 +36,17 @@ El seeder carga los 15 proveedores de `SUPPLIERS_SEED` (copiados en `seed_data.p
 
 No es obligatorio ejecutarlo: al arrancar, la API siembra la base automáticamente si está vacía.
 
+### Incidencias históricas
+
+Las incidencias **no** se siembran solas. Se cargan desde el CSV del analizador con el script del monorepo (desde la raíz del repo):
+
+```bash
+uv run --project services/api python scripts/seed_incidents.py
+# Insertadas 96 · Ya existentes (saltadas) 0 · Inválidas 4 (filas 18, 44, 87 y 91)
+```
+
+Es idempotente (una segunda ejecución inserta 0 y salta 96). Detalles en [`scripts/README.es.md`](../../scripts/README.es.md).
+
 ## Arrancar la API
 
 ```bash
@@ -50,7 +62,7 @@ uv run uvicorn main:app --reload --port 8000
 uv run pytest
 ```
 
-Los tests usan bases TinyDB temporales (`tmp_path`) vía `SUPPLIERS_DB_PATH` y `USERS_DB_PATH`, nunca los ficheros reales, y fijan su propio `SECRET_KEY` (no leen tu `.env`).
+Los tests usan bases TinyDB temporales (`tmp_path`) vía `SUPPLIERS_DB_PATH`, `USERS_DB_PATH` e `INCIDENTS_DB_PATH`, nunca los ficheros reales, y fijan su propio `SECRET_KEY` (no leen tu `.env`).
 
 ## Variables de entorno
 
@@ -58,6 +70,7 @@ Los tests usan bases TinyDB temporales (`tmp_path`) vía `SUPPLIERS_DB_PATH` y `
 | ------------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
 | `SUPPLIERS_DB_PATH` | `services/api/data/suppliers.json`            | Fichero JSON de TinyDB. Una ruta relativa se resuelve desde el directorio de trabajo. La carpeta `data/` está en `.gitignore`. |
 | `USERS_DB_PATH`     | `services/api/data/users.json`                | Fichero TinyDB de usuarios y perfiles (tablas `users` y `profiles`).         |
+| `INCIDENTS_DB_PATH` | `services/api/data/incidents.json`            | Fichero TinyDB del gestor de incidencias (tabla `incidents`). Lo usan la API y `scripts/seed_incidents.py`. |
 | `SECRET_KEY`        | — (obligatoria)                               | Clave con la que se firman los JWT.                                          |
 | `ALGORITHM`         | — (obligatoria, p. ej. `HS256`)               | Algoritmo de firma JWT.                                                      |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | — (obligatoria, p. ej. `30`)        | Validez del token de acceso.                                                 |
@@ -74,6 +87,8 @@ services/api/
 ├── main.py              # Aplicación FastAPI: CORS, routers y lifespan (abre TinyDB y siembra si está vacía)
 ├── config.py            # Carga .env: SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 ├── models.py            # Modelos Pydantic: enums, SupplierCreate, Supplier, RateUpdate, StatusUpdate
+├── incident_models.py   # Modelos del gestor de incidencias (enums en packages/shared: nexova_shared.incidents)
+├── incident_errors.py   # IncidentRoute: 400 con errores por campo y 500 genérico, solo en el gestor de incidencias
 ├── user_models.py       # Modelos de usuarios, perfiles y token (las respuestas nunca incluyen hashed_password)
 ├── database.py          # Inicialización y acceso a TinyDB (único módulo que toca la base; facilita migrar a Postgres)
 ├── security.py          # Hash bcrypt (libpass) y firma/validación de JWT (python-jose)
@@ -84,7 +99,8 @@ services/api/
 │   ├── users.py         # /users
 │   ├── profiles.py      # /profiles/me
 │   ├── suppliers.py     # Endpoints del directorio de proveedores (/suppliers) — protegidos
-│   └── incidents.py     # Endpoints de análisis de incidencias (/api/incidents) — protegidos
+│   ├── incidents.py     # Análisis del CSV (/api/incidents/analyze, /results/export) — protegidos
+│   └── incident_manager.py  # Gestor de incidencias (/api/incidents, /summary, /{id}, /{id}/status) — protegidos
 ├── seed.py              # Carga de datos iniciales (`uv run seed`)
 ├── seed_data.py         # SUPPLIERS_SEED copiado literalmente del CONTEXT
 └── tests/
@@ -187,11 +203,65 @@ curl -X PATCH $API/suppliers/1/status -H 'Content-Type: application/json' -d '{"
 curl -X DELETE $API/suppliers/1
 ```
 
-## Endpoints de incidencias
+## Endpoints de análisis del CSV
 
 ```bash
 curl -F "file=@../../scripts/incidents-nexova.csv;type=text/csv" $API/api/incidents/analyze
 curl -o results.csv $API/api/incidents/results/export
+```
+
+## Gestor de incidencias
+
+### Modelo `Incident`
+
+| Campo         | Tipo                                                     | Notas |
+| ------------- | -------------------------------------------------------- | ----- |
+| `id`          | int                                                      | `doc_id` de TinyDB. Solo en respuestas. |
+| `title`       | string, obligatorio, 1–120 caracteres                    | Se recortan los espacios. |
+| `description` | string, obligatorio                                      | |
+| `category`    | `technical_failure` \| `process_error` \| `client_complaint` \| `candidate_issue` \| `staff_issue` \| `sla_breach` \| `data_quality` \| `other` | |
+| `status`      | `open` \| `in_progress` \| `resolved` \| `discarded`     | Siempre `open` al crear; luego solo cambia con `PATCH /{id}/status`. |
+| `origin`      | `customer` \| `branch` \| `internal`                     | |
+| `branch`      | `central` \| `valencia_operations` \| `miami_office` \| `remote` | Siempre obligatorio; `central` si no corresponde a una oficina. |
+| `source_id`   | string \| null, único                                    | `ticket_id` del CSV; solo para la idempotencia del seed. `null` en las creadas por la API. |
+| `created_at`, `updated_at` | datetime UTC                                | Automáticos; `updated_at` cambia en cada modificación. |
+| `next_statuses` | lista                                                  | Calculado: estados a los que puede pasar (vacío en los finales). Solo en respuestas. |
+
+Los valores permitidos y las transiciones se definen una sola vez en `packages/shared` (`nexova_shared.incidents`). TinyDB no admite restricciones (NOT NULL, CHECK), así que la integridad se garantiza en los modelos (`IncidentRecord` valida cada documento antes de escribirlo) y en `IncidentRepository` (unicidad de `source_id` y transiciones comprobadas bajo un lock).
+
+Transiciones: `open → in_progress | discarded`, `in_progress → resolved | discarded`; `resolved` y `discarded` son finales.
+
+### Endpoints
+
+| Ruta | Respuesta |
+| --- | --- |
+| `POST /api/incidents` | 201 con la incidencia. Campo obligatorio vacío o valor no permitido: 400. |
+| `GET /api/incidents?status=&origin=&branch=&category=` | Lista (más recientes primero), filtros opcionales combinables. `[]` si no hay datos. |
+| `GET /api/incidents/summary` | `{total, by_status, by_category, by_origin, by_branch}` con **todos** los valores permitidos, aunque estén a 0. |
+| `GET /api/incidents/{id}` | Detalle, o 404 `{"detail": "No existe ninguna incidencia con id 7"}`. |
+| `PATCH /api/incidents/{id}/status` | Body `{"status"}`. Solo cambia `status` y `updated_at`. Transición no permitida: 400 explicándola. Id inexistente: 404. |
+
+### Errores
+
+Solo en estas rutas (`route_class=IncidentRoute`), los errores de validación son **400** en vez del 422 de FastAPI, con un mensaje claro por campo:
+
+```json
+{"detail": "Datos no válidos", "errors": [{"field": "title", "message": "El título es obligatorio"}]}
+```
+
+Las excepciones no controladas devuelven `500 {"detail": "Ha ocurrido un error inesperado"}` sin stack trace; el error completo se registra en los logs del servidor (logger `incident_errors`). El resto de rutas (`/users`, `/auth`, `/suppliers`, `/api/incidents/analyze`) mantienen el formato 422 de FastAPI, del que depende el formulario de registro del backoffice.
+
+```bash
+curl -X POST $API/api/incidents -H "$AUTH" -H 'Content-Type: application/json' -d '{
+  "title": "Zendesk no carga los tickets",
+  "description": "El panel devuelve 503 a todo el equipo de soporte.",
+  "category": "technical_failure",
+  "origin": "branch",
+  "branch": "miami_office"
+}'
+curl -H "$AUTH" "$API/api/incidents?status=open&branch=central"
+curl -H "$AUTH" $API/api/incidents/summary
+curl -X PATCH $API/api/incidents/1/status -H "$AUTH" -H 'Content-Type: application/json' -d '{"status": "in_progress"}'
 ```
 
 ## Backoffice
@@ -200,7 +270,7 @@ El backoffice (`uis/backoffice`) llama a la API a través de un proxy de Next.js
 
 ### Sesión en el backoffice
 
-- `/login` y `/register` son públicas (con sesión redirigen a `/`); `/forgot-password` y `/reset-password` son públicas sin redirección (el enlace del email funciona aunque haya sesión); el resto (`/`, `/incidents`, `/suppliers`, `/account/profile`, `/account/change-password`) exige sesión.
+- `/login` y `/register` son públicas (con sesión redirigen a `/`); `/forgot-password` y `/reset-password` son públicas sin redirección (el enlace del email funciona aunque haya sesión); el resto (`/`, `/incidents` —análisis CSV—, `/incidents/new`, `/incidents/list`, `/incidents/summary`, `/suppliers`, `/account/profile`, `/account/change-password`) exige sesión.
 - Al iniciar sesión, el token de `POST /auth/login` se guarda en `localStorage` (`nexova.accessToken`) y cada llamada protegida lo envía como `Authorization: Bearer <token>` (`src/lib/apiClient.ts`).
 - La protección es en el cliente (`src/components/AuthGuard.tsx`): sin token, o con el `exp` vencido, redirige a `/login`. La firma la valida la API; cualquier 401 borra el token y lleva a `/login`.
 - "Cerrar sesión" (barra superior) borra el token. No hay cookies ni middleware de Next.js.

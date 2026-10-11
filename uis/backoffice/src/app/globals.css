@@ -107,3 +107,24 @@ label input[aria-invalid="true"] { border-color: #a51c30; }
 .topbar .logout:hover { color: white; border-color: #cfd8ea; }
 fieldset.plain { border: 0; margin: 0; padding: 0; min-width: 0; }
 .form-stack > a { align-self: flex-start; }
+
+/* Incident manager */
+label select[aria-invalid="true"], label textarea[aria-invalid="true"] { border-color: #a51c30; }
+label.highlight { outline: 2px solid #d98e04; outline-offset: 6px; border-radius: 4px; background: #fff8e1; }
+label.highlight select { border: 2px solid #d98e04; }
+.highlight-text { color: #7a4f00; font-weight: bold; }
+.button.secondary { background: #e5e9f0; color: #172033; }
+.spinner { display: inline-block; width: 1em; height: 1em; margin-right: .45rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -.15em; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } }
+.state { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 0; }
+.notice { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: .75rem 1rem; border-radius: 8px; background: #fde3e7; color: #8a1528; }
+.notice p { margin: 0; }
+.badge.open { background: #e3ebff; color: #1d3f9c; }
+.badge.in_progress { background: #fff1d6; color: #7a4f00; }
+.badge.resolved { background: #dff3e6; color: #1f6b3d; }
+.badge.discarded { background: #e5e9f0; color: #4a5468; }
+table.incidents td { vertical-align: top; }
+table.incidents tr.pending td { opacity: .6; }
+.status-actions { display: flex; flex-wrap: wrap; gap: .3rem; }
+.totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 0 2rem; }

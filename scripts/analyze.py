@@ -1,6 +1,6 @@
 """Command-line interface for the Nexova incident report analyzer.
 
-Usage: python analyze.py incidents-nexova.csv
+Usage (from the repo root): uv run --project services/api python scripts/analyze.py scripts/incidents-nexova.csv
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from incident_analysis import (
+from nexova_shared.csv_validation import (
     CORE_RULES,
     PROBLEM_LABELS,
     RULE_LABELS,

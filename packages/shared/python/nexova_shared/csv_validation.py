@@ -1,7 +1,7 @@
 """Shared, privacy-safe incident CSV validation and analysis logic.
 
-Used by both scripts/analyze.py (CLI) and services/api (FastAPI), so the
-validation rules and metrics live in exactly one place. Field names, categories,
+Used by scripts/analyze.py (CLI), scripts/seed_incidents.py and services/api
+(FastAPI), so the validation rules and metrics live in exactly one place. Field names, categories,
 statuses and ranges come from CONTEXT-nexova.es.md.
 
 Privacy: no function in this module returns, logs or exports field values
@@ -179,8 +179,8 @@ def analyze_rows(rows: Iterable[Mapping[str, str | None]]) -> AnalysisResult:
     )
 
 
-def analyze_csv_text(text: str) -> AnalysisResult:
-    """Validate the header and analyse a CSV given as text.
+def read_csv_rows(text: str) -> list[dict[str, str | None]]:
+    """Check the header of a CSV given as text and return its data rows.
 
     Raises EmptyCsvError if the file is empty, CsvFormatError if it has no data
     rows, lacks required columns or is not parseable CSV.
@@ -200,7 +200,12 @@ def analyze_csv_text(text: str) -> AnalysisResult:
         raise CsvFormatError(f"The file is not a valid CSV: {error}") from error
     if not rows:
         raise CsvFormatError("The CSV has a header but no data rows")
-    return analyze_rows(rows)
+    return rows
+
+
+def analyze_csv_text(text: str) -> AnalysisResult:
+    """Validate the header and analyse a CSV given as text (errors as in read_csv_rows)."""
+    return analyze_rows(read_csv_rows(text))
 
 
 def analyze_csv_file(file: TextIO) -> AnalysisResult:
