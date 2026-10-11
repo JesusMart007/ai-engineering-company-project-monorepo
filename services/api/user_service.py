@@ -36,7 +36,7 @@ def get_user_by_id(repository: UserRepository, user_id: str) -> User | None:
 
 
 def get_user_by_email(repository: UserRepository, email: str) -> User | None:
-    return repository.get_user_by_email(email.lower())
+    return repository.get_user_by_email(email.strip().lower())
 
 
 def list_users(repository: UserRepository) -> list[User]:
