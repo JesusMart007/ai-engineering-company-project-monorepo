@@ -47,6 +47,17 @@ uv run --project services/api python scripts/seed_incidents.py
 
 Es idempotente (una segunda ejecución inserta 0 y salta 96). Detalles en [`scripts/README.es.md`](../../scripts/README.es.md).
 
+### Inventario (Supabase)
+
+El inventario vive en Postgres (Supabase), no en TinyDB. Pon `DATABASE_URL` en `.env` (Connect → Direct → **Transaction pooler** → URI, puerto 6543; ver `.env.example`). La API crea las tablas `asset`, `assetentry` y `assetexit` (con sus claves foráneas) al arrancar. Para cargar los datos de CONTEXT-nexova (6 activos, 7 entradas, 4 salidas), desde la raíz del repo:
+
+```bash
+uv run --project services/api python scripts/seed_inventory.py
+# Inventory seed completed (...): 6 assets, 7 entries, 4 exits inserted.
+```
+
+Es idempotente: los activos se comprueban por `sku` y las órdenes por activo, cantidad, proveedor o tipo de salida, destinatario, oficina y `created_at` fijo; una segunda ejecución inserta 0. El `user_uuid` de las órdenes sembradas es el id de un usuario real de TinyDB: el de `SEED_USER_EMAIL` o, si no se define, el primero de `users.json` (regístrate antes con `POST /users`). Stock neto esperado: `NXV-IT-001` 12 · `NXV-IT-002` 6 · `NXV-PER-001` 16 · `NXV-PER-002` 12 · `NXV-OFF-001` 38 · `NXV-TRN-001` 30.
+
 ## Arrancar la API
 
 ```bash
@@ -71,6 +82,7 @@ Los tests usan bases TinyDB temporales (`tmp_path`) vía `SUPPLIERS_DB_PATH`, `U
 | `SUPPLIERS_DB_PATH` | `services/api/data/suppliers.json`            | Fichero JSON de TinyDB. Una ruta relativa se resuelve desde el directorio de trabajo. La carpeta `data/` está en `.gitignore`. |
 | `USERS_DB_PATH`     | `services/api/data/users.json`                | Fichero TinyDB de usuarios y perfiles (tablas `users` y `profiles`).         |
 | `INCIDENTS_DB_PATH` | `services/api/data/incidents.json`            | Fichero TinyDB del gestor de incidencias (tabla `incidents`). Lo usan la API y `scripts/seed_incidents.py`. |
+| `DATABASE_URL`      | — (obligatoria al arrancar la API)            | Cadena de conexión Postgres de Supabase (Transaction pooler, URI). Solo en `.env`; los tests usan SQLite en memoria. |
 | `SECRET_KEY`        | — (obligatoria)                               | Clave con la que se firman los JWT.                                          |
 | `ALGORITHM`         | — (obligatoria, p. ej. `HS256`)               | Algoritmo de firma JWT.                                                      |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | — (obligatoria, p. ej. `30`)        | Validez del token de acceso.                                                 |
@@ -99,13 +111,30 @@ services/api/
 │   ├── auth.py          # /auth/login y /auth/me
 │   ├── users.py         # /users
 │   ├── profiles.py      # /profiles/me
+│   ├── inventory.py     # /inventory (Supabase): productos y órdenes de entrada/salida — protegidos
 │   ├── suppliers.py     # Endpoints del directorio de proveedores (/suppliers) — protegidos
 │   ├── incidents.py     # Análisis del CSV (/api/incidents/analyze, /results/export) — protegidos
 │   └── incident_manager.py  # Gestor de incidencias (/api/incidents, /summary, /{id}, /{id}/status) — protegidos
+├── inventory_models.py  # Tablas SQLModel: Asset, AssetEntry, AssetExit (sin columna de stock)
+├── inventory_schemas.py # Schemas Pydantic de request/response del inventario (independientes de las tablas)
+├── inventory_service.py # Stock derivado (agregados GROUP BY) y reglas de las órdenes
 ├── seed.py              # Carga de datos iniciales (`uv run seed`)
 ├── seed_data.py         # SUPPLIERS_SEED copiado literalmente del CONTEXT
 └── tests/
 ```
+
+## Inventario (`/inventory`)
+
+Todas las rutas exigen token. El stock no se edita: `current_stock = SUM(entradas) − SUM(salidas)` por activo, calculado en cada consulta. `user_uuid` sale siempre del usuario autenticado (TinyDB), nunca del body.
+
+| Método | Ruta                          | Descripción                                                                 |
+| ------ | ----------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/inventory/products`         | Activos con `current_stock` (filtro opcional `?office=Valencia\|Miami`)      |
+| POST   | `/inventory/products`         | Crea un activo (stock 0). `sku` repetido: 409                               |
+| GET    | `/inventory/products/{id}`    | Un activo con su stock. 404 si no existe                                    |
+| POST   | `/inventory/orders/inbound`   | Entrada (`AssetEntry`). Activo inexistente: 404                             |
+| POST   | `/inventory/orders/outbound`  | Salida (`AssetExit`). Stock insuficiente: 400 sin escribir. `allocation` exige `assigned_to`; `consumption` lo exige nulo (422) |
+| GET    | `/inventory/orders`           | Entradas y salidas con los datos del activo y `user_uuid`                   |
 
 ## Modelo de proveedor
 
