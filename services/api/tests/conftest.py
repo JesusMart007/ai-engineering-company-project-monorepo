@@ -12,6 +12,8 @@ sys.path.insert(0, str(API_ROOT))
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["ALGORITHM"] = "HS256"
 os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "30"
+# In-memory SQLite stands in for Supabase: no test ever opens the real DATABASE_URL.
+os.environ["DATABASE_URL"] = "sqlite://"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -20,10 +22,19 @@ import security  # noqa: E402
 # Production uses bcrypt's default cost; 4 rounds keeps the suite fast.
 security.bcrypt = security.bcrypt.using(rounds=4)
 
+import database  # noqa: E402
 import main  # noqa: E402
 from database import DB_PATH_ENV, INCIDENTS_DB_PATH_ENV, USERS_DB_PATH_ENV  # noqa: E402
 
 PASSWORD = "correct-horse-1"
+
+
+@pytest.fixture(autouse=True)
+def fresh_sql_engine():
+    """Each test gets its own empty in-memory inventory database."""
+    database.get_engine.cache_clear()
+    yield
+    database.get_engine.cache_clear()
 
 
 @pytest.fixture()

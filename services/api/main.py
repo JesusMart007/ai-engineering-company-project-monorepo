@@ -1,4 +1,4 @@
-"""Nexova centralized API: supplier directory, incident analysis and management, and user accounts.
+"""Nexova centralized API: supplier directory, incident analysis and management, user accounts and inventory.
 
 Run with `uv run uvicorn main:app --reload` from services/api.
 """
@@ -17,12 +17,13 @@ from database import (
     IncidentRepository,
     SupplierRepository,
     UserRepository,
+    create_db_and_tables,
     db_path_from_env,
     incidents_db_path_from_env,
     users_db_path_from_env,
 )
 from errors import register_error_handlers
-from routes import auth, incident_manager, incidents, profiles, suppliers, users
+from routes import auth, incident_manager, incidents, inventory, profiles, suppliers, users
 from seed import seed
 
 # Application loggers (errors, incident_errors, email_service...) propagate to the root
@@ -50,6 +51,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.user_repository = UserRepository(users_db_path_from_env())
     # Incidents start empty; historical ones are loaded with scripts/seed_incidents.py.
     app.state.incident_repository = IncidentRepository(incidents_db_path_from_env())
+    # Inventory tables (Supabase); the SQL engine is built lazily and pooled per process.
+    create_db_and_tables()
     try:
         yield
     finally:
@@ -66,6 +69,7 @@ app.include_router(incident_manager.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(profiles.router)
+app.include_router(inventory.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
