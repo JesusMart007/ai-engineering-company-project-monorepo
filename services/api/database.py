@@ -378,6 +378,8 @@ def get_engine() -> Engine:
     url = config.database_url()
     if url.startswith("sqlite"):
         return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    # SQLAlchemy 2.1 picks psycopg v3 for a bare postgresql:// URL; the project ships psycopg2.
+    url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=2, echo=False)
 
 
