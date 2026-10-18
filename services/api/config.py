@@ -44,3 +44,11 @@ FRONTEND_URL = (os.environ.get("FRONTEND_URL", "").strip() or "http://localhost:
 RESET_TOKEN_EXPIRE_MINUTES = _positive_int(
     "RESET_TOKEN_EXPIRE_MINUTES", os.environ.get("RESET_TOKEN_EXPIRE_MINUTES", "").strip() or "30"
 )
+
+
+def database_url() -> str:
+    """Postgres (Supabase) connection string for the inventory ORM, read when the engine is first built.
+
+    Not read at import time so the rest of the API (and its tests) never needs it.
+    """
+    return _required("DATABASE_URL")

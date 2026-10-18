@@ -14,6 +14,8 @@ dependencies = [
     "python-dotenv>=1.2.4",
     "resend>=2.49.1",
     "nexova-shared",
+    "sqlmodel>=0.0.48",
+    "psycopg2-binary>=2.9.13",
 ]
 
 [project.scripts]
@@ -35,6 +37,7 @@ build-backend = "hatchling.build"
 only-include = [
     "main.py", "config.py", "models.py", "incident_models.py", "incident_errors.py", "errors.py", "user_models.py", "database.py", "security.py",
     "user_service.py", "email_service.py", "dependencies.py", "seed.py", "seed_data.py", "routes",
+    "inventory_models.py", "inventory_schemas.py", "inventory_service.py",
 ]
 
 [tool.uv]

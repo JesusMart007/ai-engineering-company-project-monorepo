@@ -1,8 +1,11 @@
-"""TinyDB data access for suppliers, incidents, users, profiles and password reset tokens.
+"""Data access: TinyDB for suppliers, incidents, users, profiles and password reset tokens,
+and a SQLModel engine (Supabase Postgres) for the inventory.
 
-Routes only talk to SupplierRepository, so moving to Postgres later means
+Routes only talk to the repositories, so moving to Postgres later means
 rewriting this module without touching the API layer. Documents are stored as
 JSON (dates and datetimes in ISO 8601) and turned back into models on read.
+The two databases are independent: the inventory keeps only the TinyDB user id
+(`user_uuid`), never a copy of the user.
 """
 
 from __future__ import annotations
@@ -11,12 +14,19 @@ import json
 import os
 import threading
 from collections import Counter
+from collections.abc import Iterator
+from functools import lru_cache
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+from sqlalchemy.engine import Engine
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 from tinydb import Query, TinyDB
 from tinydb.table import Document
+
+import config
 
 from incident_models import Incident, IncidentRecord, IncidentSummary
 from models import Category, Country, Supplier, SupplierCreate, SupplierStatus
@@ -352,3 +362,33 @@ class UserRepository:
         with self._lock:
             doc = self._reset_tokens.get(Query().jti == jti)
         return PasswordResetToken.model_validate(doc) if doc else None
+
+
+# --- Inventory: SQLModel engine on Supabase (Postgres) -------------------------------------------
+
+
+@lru_cache
+def get_engine() -> Engine:
+    """The process-wide engine, built on first use from DATABASE_URL.
+
+    Supabase's transaction pooler (port 6543) already pools connections, so the
+    local pool stays small; `pool_pre_ping` drops connections the pooler closed.
+    SQL is never echoed (the URL holds the password). SQLite URLs are only for tests.
+    """
+    url = config.database_url()
+    if url.startswith("sqlite"):
+        return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=2, echo=False)
+
+
+def get_db() -> Iterator[Session]:
+    """FastAPI dependency: one Session per request, closed when the request ends."""
+    with Session(get_engine()) as session:
+        yield session
+
+
+def create_db_and_tables() -> None:
+    """Create the inventory tables (and their foreign keys) if they do not exist."""
+    import inventory_models  # noqa: F401  (registers the tables on SQLModel.metadata)
+
+    SQLModel.metadata.create_all(get_engine())
