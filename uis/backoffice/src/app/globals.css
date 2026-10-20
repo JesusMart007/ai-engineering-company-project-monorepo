@@ -128,3 +128,13 @@ table.incidents td { vertical-align: top; }
 table.incidents tr.pending td { opacity: .6; }
 .status-actions { display: flex; flex-wrap: wrap; gap: .3rem; }
 .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 0 2rem; }
+
+/* Inventory: each badge pairs colour with an icon and text, never colour alone */
+.badge.out { background: #fde3e7; color: #8a1528; }
+.badge.low { background: #fff1d6; color: #7a4f00; }
+.badge.healthy { background: #dff3e6; color: #1f6b3d; }
+.badge.inbound { background: #dff3e6; color: #1f6b3d; }
+.badge.outbound { background: #e3ebff; color: #1d3f9c; }
+.row-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.row-actions .button { padding: .4rem .7rem; font-size: .9rem; }
+.field-warn { color: #7a4f00; font-weight: bold; }
