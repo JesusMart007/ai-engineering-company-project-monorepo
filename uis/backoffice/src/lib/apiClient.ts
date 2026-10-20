@@ -65,7 +65,12 @@ function failure(fallback: string, status: number, kind: ApiErrorKind = "http"):
  * 400 `errors[]`) come from the body; any other `detail` is server text and is
  * replaced by a message for the status. Callers translate the statuses they expect.
  */
-async function toApiError(response: Response, fallback: string, labels: Record<string, string>): Promise<ApiError> {
+async function toApiError(
+  response: Response,
+  fallback: string,
+  labels: Record<string, string>,
+  exposeDetailFor: number[],
+): Promise<ApiError> {
   let body: { detail?: unknown; errors?: unknown } = {};
   try {
     body = await response.json();
@@ -87,6 +92,9 @@ async function toApiError(response: Response, fallback: string, labels: Record<s
       return field ? `${labels[field] ?? field}: ${message}` : message;
     });
   }
+  if (messages.length === 0 && typeof body?.detail === "string" && exposeDetailFor.includes(response.status)) {
+    return new ApiError(response.status, [body.detail]);
+  }
   if (messages.length === 0) return failure(fallback, response.status);
   return new ApiError(response.status, messages, fieldErrors);
 }
@@ -104,6 +112,10 @@ export type ApiOptions = Omit<RequestInit, "body"> & {
   fallback?: string;
   /** Human names for fields in 422 messages. */
   labels?: Record<string, string>;
+  /** Call this base URL (no trailing slash) with the path as given, instead of the /api proxy. */
+  baseUrl?: string;
+  /** Statuses whose string `detail` is written for people and is shown as is (e.g. 400 "Insufficient stock…"). */
+  exposeDetailFor?: number[];
 };
 
 const DEFAULT_FALLBACK = "No se pudo completar la operación";
@@ -114,7 +126,7 @@ const DEFAULT_FALLBACK = "No se pudo completar la operación";
  * Every failure is an ApiError whose messages are safe to show.
  */
 export async function apiFetch(path: string, options: ApiOptions = {}): Promise<Response> {
-  const { json, auth = true, fallback = DEFAULT_FALLBACK, labels = {}, ...init } = options;
+  const { json, auth = true, fallback = DEFAULT_FALLBACK, labels = {}, baseUrl, exposeDetailFor = [], ...init } = options;
   const headers = new Headers(init.headers);
   if (json !== undefined) headers.set("Content-Type", "application/json");
   if (auth) {
@@ -124,7 +136,7 @@ export async function apiFetch(path: string, options: ApiOptions = {}): Promise<
 
   let response: Response;
   try {
-    response = await fetch(apiUrl(path), {
+    response = await fetch(baseUrl ? `${baseUrl}${path}` : apiUrl(path), {
       ...init,
       headers,
       body: json !== undefined ? JSON.stringify(json) : init.body,
@@ -140,7 +152,7 @@ export async function apiFetch(path: string, options: ApiOptions = {}): Promise<
     redirectToLogin();
     throw new ApiError(401, [statusMessage(401)]);
   }
-  if (!response.ok) throw await toApiError(response, fallback, labels);
+  if (!response.ok) throw await toApiError(response, fallback, labels, exposeDetailFor);
   return response;
 }
 

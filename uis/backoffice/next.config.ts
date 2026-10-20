@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       { source: "/api/auth/:path*", destination: `${API_INTERNAL_URL}/auth/:path*` },
       { source: "/api/users", destination: `${API_INTERNAL_URL}/users` },
       { source: "/api/users/:path*", destination: `${API_INTERNAL_URL}/users/:path*` },
+      // Fallback when NEXT_PUBLIC_INVENTORY_API_URL is not set: same-origin, no CORS.
+      { source: "/api/inventory/:path*", destination: `${API_INTERNAL_URL}/inventory/:path*` },
       { source: "/api/profiles/:path*", destination: `${API_INTERNAL_URL}/profiles/:path*` },
     ];
   },
