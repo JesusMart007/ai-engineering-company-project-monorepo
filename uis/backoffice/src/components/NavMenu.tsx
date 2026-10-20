@@ -10,6 +10,10 @@ const LINKS = [
   { href: "/incidents/list", label: "Incidencias" },
   { href: "/incidents/summary", label: "Resumen" },
   { href: "/suppliers", label: "Proveedores" },
+  { href: "/inventory/products", label: "Inventario" },
+  { href: "/inventory/orders/inbound", label: "Entrada de activos" },
+  { href: "/inventory/orders/outbound", label: "Salida de activos" },
+  { href: "/inventory/orders", label: "Historial de órdenes" },
   { href: "/account/profile", label: "Mi perfil" },
 ];
 
