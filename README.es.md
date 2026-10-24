@@ -28,6 +28,19 @@ Este repositorio es la **plantilla de inicio** para los proyectos transversales.
 5. **Empieza a implementar** en la carpeta correcta — no tires todo en la raíz.
 6. **Documenta** lo que añadas: cada app, servicio, agente o pipeline nuevo lleva subcarpeta + README.
 
+### Ejecutar todo con Docker
+
+```bash
+cp .env.example .env   # luego rellena los valores reales
+docker compose up --build
+```
+
+- API: http://localhost:8000/docs
+- Website: http://localhost:3000
+- Backoffice: http://localhost:3001
+
+El código fuente se monta como volumen, así que los cambios se recargan solos.
+
 ---
 
 ## Cómo entender este monorepo

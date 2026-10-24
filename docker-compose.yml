@@ -1,0 +1,43 @@
+name: nexova
+
+services:
+  interfaces:
+    build: ./uis
+    ports:
+      - "3000:3000"   # website
+      - "3001:3001"   # backoffice
+    environment:
+      # Server-side proxy target: service name on the Docker network, never localhost.
+      API_INTERNAL_URL: ${API_INTERNAL_URL}
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./uis/talent-pipeline-tracker:/app/website
+      - ./uis/backoffice:/app/backoffice
+      - website_node_modules:/app/website/node_modules
+      - backoffice_node_modules:/app/backoffice/node_modules
+    depends_on:
+      - api
+    networks:
+      - nexova-net
+
+  api:
+    build:
+      context: ./services
+      additional_contexts:
+        shared: ./packages/shared
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./services/api:/app/services/api
+    networks:
+      - nexova-net
+
+volumes:
+  website_node_modules:
+  backoffice_node_modules:
+
+networks:
+  nexova-net:
+    name: nexova-net
