@@ -24,6 +24,13 @@ Full-stack monorepo for **Nexova**, a fictional company I'm building milestone b
 | **Backoffice** | An internal app for suppliers, incidents, inventory and accounts, with route guards and session checks. | Next.js · React · TypeScript · Jest |
 | **Talent pipeline website** | A public candidate tracker with search, filters and notes. The home page is rendered on the server. | Next.js 16 · React 19 · Tailwind CSS 4 |
 
+<details>
+<summary><strong>API endpoints (Swagger UI)</strong></summary>
+
+![Swagger UI for the Nexova API, listing endpoints for suppliers, incidents, auth, users, profiles and inventory](docs/screenshots/2d35687e-2776-4b6f-a9a3-dc31175fb4d1.png)
+
+</details>
+
 ## Highlights
 
 - **One centralised API** with a router for each domain (`/suppliers`, `/auth`, `/users`, `/profiles`, `/api/incidents`, `/inventory`), documented automatically at `/docs`.
